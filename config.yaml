@@ -1,0 +1,32 @@
+server:
+  port: 8080
+
+storage:
+  max_gb: 50
+  clip_dir: ./clips
+  event_dir: ./events
+  screenshot_dir: ./screenshots
+
+capture:
+  device: 0
+  width: 640
+  height: 480
+  fps: 25
+
+encoding:
+  record_bitrate: 4000000  # 4Mbps
+  monitor_bitrate: 500000   # 500kbps
+  segment_min: 5
+  # 硬件编码优先级: h264_qsv > h264_nvenc > libx264
+  hw_encoder: auto
+
+detection:
+  enabled: true
+  socket: /tmp/visionloop_det.sock
+  api_base: http://localhost:8080
+  detect_fall: true
+  detect_cry: true
+  detect_noise: true
+  detect_intruder: true
+  sensitivity: 0.7
+  frame_interval_ms: 500

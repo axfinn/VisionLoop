@@ -1,0 +1,36 @@
+{
+  "task": "# VisionLoop 循环录制系统 - 技术实现方案\n\n版本 1.0.0 | 2026-03-25\n\n## 一、系统架构\n\n摄像头 → gocv采集 → 原始帧\n  ├─ 录制编码器(4Mbps) → MP4分段(5min) → Gin :8080\n  └─ 监看编码器(500kbps) → Pion WebRTC → 浏览器\n                              └─ 事件检测引擎(异步抽帧)\n\n## 二、后端实现\n\n### 采集层\ngocv打开摄像头，frameCh无缓冲，下游满时丢帧，采集永不阻塞。\n\n### 硬编码层（核心）\nCGO + FFmpeg，探测顺序：h264_qsv → h264_nvenc → libx264。同一帧发两路编码器互不阻塞。监看流启用zerolatency禁用B帧，编码延迟<50ms。\n\n### 分段录制 & 存储GC\n文件命名：2026-03-25_14-30-00.mp4。每次写包检查磁盘，超限自动删最旧文件。\n\n### 事件检测引擎\n从监看流每500ms抽一帧，送入YOLOv8姿态检测+音频异常检测（哭声/异响），检测异步不阻塞编码链路。\n\n支持事件：摔倒检测(YOLOv8姿态) / 哭声检测(音频频谱) / 异响检测(音频频谱) / 陌生人闯入(YOLOv8人形+人脸)。检测结果含时间戳和截图，存入事件库，回放时同步展示。\n\n### Gin API\n/api/clips 文件列表 | /api/clips/:name Range拖拽 | /api/events 事件列表 | /api/ws/signal 信令 | / Vue3 SPA\n\n## 三、前端 Vue 3\n\n实时监看(WebRTC+事件气泡) | 历史回放(video.js+Range拖拽+事件标注) | 事件中心(列表/截图/快速定位) | 设置页(存储/检测开关/灵敏度)\n\n## 四、打包分发\n\ngo build -ldflags=\"-H windowsgui -s -w\" -o VisionLoop.exe（嵌入前端+模型） + ffmpeg.dll（含QSV/NVENC）。双击即用，访问 http://localhost:8080\n\n## 五、性能保障\n\nQSV/NVENC硬件编码（CPU<5%）| 检测异步不阻塞编码 | 双goroutine channel隔离 | WebRTC zerolatency | 存储超限删最旧文件\n\n## 六、依赖\n\ngocv | Pion WebRTC | Gin | FFmpeg CGO | YOLOv8+ONNX | 音频频谱 | Vue3+video.js\n  git@github.com:axfinn/VisionLoop.git",
+  "status": "running",
+  "current_phase": 5,
+  "phase_label": "DELIVER  交付",
+  "started_at": "2026-03-25T20:33:26.895450",
+  "pid": 1580,
+  "completed_phases": [
+    {
+      "index": 0,
+      "success": true,
+      "time": "2026-03-25T20:02:48.525470"
+    },
+    {
+      "index": 1,
+      "success": true,
+      "time": "2026-03-25T20:03:43.179499"
+    },
+    {
+      "index": 2,
+      "success": true,
+      "time": "2026-03-25T20:05:50.567433"
+    },
+    {
+      "index": 3,
+      "success": true,
+      "time": "2026-03-25T20:24:04.869145"
+    },
+    {
+      "index": 4,
+      "success": true,
+      "time": "2026-03-25T20:33:26.893914"
+    }
+  ],
+  "last_completed": 4
+}
