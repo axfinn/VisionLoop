@@ -214,3 +214,38 @@ graph TD
 - **DO**: 完成25项交付物，涉及Go后端8模块、Vue3前端5组件、Python检测3模块、配置构建文档。遇到并修复了encoder类型重复、image包缺失、WebSocket信令为空、UnixAddr语法错误、gc缺少GetMaxGB等问题
 
 - **REVIEW**: 识别3个阻断问题（H.264编码stub、MP4封装stub、伪音频检测），均需FFmpeg CGO集成解决，作为后续迭代项。已修复WebRTC信令、类型不匹配等5个本轮问题
+
+---
+
+## 迭代 1: 实现H.264编码、MP4封装和音频检测改进
+
+### 完成的工作
+
+1. **H.264编码器 (encoder.go)**: 实现基于ffmpeg libx264的软编码，通过pipe与ffmpeg进程通信，异步读取NALU
+
+2. **MP4封装 (mp4.go)**: 实现标准MP4 box结构(ftyp/moov/mdat)，avcC描述符，sample table
+
+3. **音频检测 (audio.py)**: 改进特征提取算法，添加灵敏度参数和历史平滑
+
+4. **主循环 (main.go)**: 更新适配新的NALU获取API
+
+### 新增/修改文件
+
+- `internal/encoder/encoder.go` - ffmpeg软编码器
+- `internal/mp4/mp4.go` - 标准MP4封装
+- `detection/audio.py` - 音频检测改进
+- `cmd/server/main.go` - 主循环适配
+- `process/iter-1/design.md` - 设计文档
+- `process/iter-1/result.md` - 结果报告
+
+### 远程分支
+
+已推送iter-1分支到 `git@github.com:axfinn/VisionLoop.git`
+
+### 已知限制
+
+- H.264编码依赖系统ffmpeg命令
+- MP4封装简化版，可能某些播放器不兼容
+- 音频检测仍从视频帧提取特征
+
+---
