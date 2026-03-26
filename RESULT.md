@@ -300,3 +300,47 @@ graph TD
 - `build.sh` - 改进构建选项
 - `process/iter-3/design.md` - 设计文档
 - `process/iter-3/result.md` - 结果报告
+
+---
+
+## 迭代 4: 所有变更代码都要及时同步 github ！！
+
+### 完成的工作摘要
+
+1. **创建 .gitignore** - 忽略 .autodev/ 日志、__pycache__/、构建产物
+2. **创建 sync.sh** - Git 同步脚本，支持 status/commit/push/sync 一键操作
+3. **更新 deploy.sh** - 添加 git-status/git-commit/git-push 命令
+4. **清理历史变更** - 移除 .autodev/ 从 Git 追踪，提交 34 个文件变更
+5. **推送 GitHub** - 所有代码变更已同步到 origin/iter-1
+
+### 新增/修改文件列表
+
+- `.gitignore` - 忽略构建产物和日志
+- `sync.sh` - Git 同步脚本（可执行）
+- `deploy.sh` - 添加 git 命令
+- `process/iter-4/design.md` - 设计文档
+- `process/iter-4/result.md` - 结果报告
+
+### 验证结果
+
+```
+=== Git Status ===
+（无未提交变更）
+
+=== Recent Commits ===
+c090f4c 修复sync.sh状态检查逻辑
+911010d 迭代2-4: 修复WebRTC,添加部署脚本和Docker支持,完善git同步
+```
+
+### 使用方法
+
+```bash
+# 使用 sync.sh
+./sync.sh status    # 查看状态
+./sync.sh sync "提交信息"  # 提交并推送
+
+# 使用 deploy.sh
+./deploy.sh git-status   # 查看 Git 状态
+./deploy.sh git-commit "提交信息"  # 提交
+./deploy.sh git-push     # 推送
+```
