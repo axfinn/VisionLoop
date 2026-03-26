@@ -249,3 +249,54 @@ graph TD
 - 音频检测仍从视频帧提取特征
 
 ---
+
+## 迭代 2: 作为技术专家 从全局的视角好好看看项目，然后优化实现，并 review 保证可用！！
+
+### 完成的工作摘要
+
+1. **MP4 封装修复** - 修复 temp 文件泄漏、stco offset 计算错误、添加 io 导入
+2. **WebRTC 流发送修复** - 添加 `WriteRawNALU` 方法，支持直接写入 NALU 数据
+3. **IPC 帧发送** - 修复检测进程从未收到帧的问题，添加 500ms 定时发送
+4. **检测进程管理** - Go 服务自动启动/停止 Python 检测进程
+5. **Vue Router 支持** - 添加 fallback 路由支持 Vue history 模式
+6. **前端导航** - 修复 navbar 丢失问题
+
+### 新增/修改文件列表
+
+- `internal/mp4/mp4.go` - MP4 修复
+- `internal/encoder/encoder.go` - 添加 `GetMonitorNALUs()`
+- `internal/webrtc/webrtc.go` - 添加 `WriteRawNALU()`
+- `internal/api/server.go` - Vue Router fallback
+- `cmd/server/main.go` - IPC 发送、检测进程管理
+- `web/src/App.vue` - 导航栏
+- `web/index.html` - 简化
+- `web/src/main.js` - video.js 导入
+- `process/iter-2/design.md` - 设计文档
+- `process/iter-2/result.md` - 结果报告
+
+---
+
+## 迭代 3: 没有部署脚本 没有 docker 部署支持 没有文档 没有配置介绍！！
+
+### 完成的工作摘要
+
+1. **部署脚本** - 新增 `deploy.sh`，支持 install/start/stop/restart/status/logs/docker 系列命令
+2. **Docker 支持** - 新增 `Dockerfile` (Go服务)、`Dockerfile.detection` (Python检测)、`docker-compose.yml` 完整编排
+3. **配置详解** - 新增 `CONFIG.md`，详细说明每个配置项的用途和取值
+4. **部署指南** - 新增 `DEPLOY.md`，覆盖 Docker/Linux/Windows 多种部署方式
+5. **增强 README** - 添加完整 API 文档、FAQ、部署说明
+6. **改进 build.sh** - 添加 `--all/--frontend/--backend/--detection/--clean` 选项
+
+### 新增/修改文件列表
+
+- `deploy.sh` - 部署脚本
+- `Dockerfile` - Go 主服务镜像
+- `Dockerfile.detection` - Python 检测进程镜像
+- `docker-compose.yml` - Docker Compose 编排
+- `CONFIG.md` - 配置详解文档
+- `DEPLOY.md` - 部署指南
+- `README.md` - 增强快速开始和 API 文档
+- `config.yaml` - 添加详细注释
+- `build.sh` - 改进构建选项
+- `process/iter-3/design.md` - 设计文档
+- `process/iter-3/result.md` - 结果报告

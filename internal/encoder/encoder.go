@@ -421,6 +421,14 @@ func (e *Encoder) GetRecordNALUs() [][]byte {
 	return e.recordEncoder.GetNALUs()
 }
 
+// GetMonitorNALUs 获取监看编码器的NALU
+func (e *Encoder) GetMonitorNALUs() [][]byte {
+	if e.monitorEncoder == nil {
+		return nil
+	}
+	return e.monitorEncoder.GetNALUs()
+}
+
 // Close 关闭编码器
 func (e *Encoder) Close() error {
 	if e.recordEncoder != nil {

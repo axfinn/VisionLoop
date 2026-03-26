@@ -3,6 +3,7 @@ package mp4
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -41,6 +42,7 @@ type MP4Writer struct {
 
 	currentFile *os.File
 	currentPath string
+	tempFilePath string  // 临时数据文件路径
 	startTime   time.Time
 	frameCount  int64
 	closed      bool
@@ -124,9 +126,12 @@ func (w *MP4Writer) newSegment() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	// 关闭旧文件
+	// 关闭旧文件并删除旧temp
 	if w.currentFile != nil {
 		w.currentFile.Close()
+	}
+	if w.tempFilePath != "" {
+		os.Remove(w.tempFilePath)
 	}
 
 	// 生成新文件名
@@ -137,13 +142,13 @@ func (w *MP4Writer) newSegment() error {
 	w.frameCount = 0
 	w.samples = make([]sampleEntry, 0)
 
-	// 创建临时文件用于mdat数据
+	// 创建临时文件用于mdat数据（保持打开状态）
 	tmpFile, err := os.CreateTemp(w.dir, "mp4tmp_*.dat")
 	if err != nil {
 		return fmt.Errorf("create temp file failed: %w", err)
 	}
-	tmpFile.Close()
-	os.Remove(tmpFile.Name())
+	// 记录temp文件路径用于后续删除
+	w.tempFilePath = tmpFile.Name()
 	w.currentFile = tmpFile
 
 	log.Printf("new segment: %s", w.currentPath)
@@ -240,6 +245,20 @@ func (w *MP4Writer) finalizeSegmentLocked() error {
 	}
 	mdatSize := fileInfo.Size()
 
+	// 生成avcC描述符
+	avcC := w.generateAVCC()
+
+	// 生成ftyp box（先生成ftyp以计算mdat偏移）
+	ftyp := w.generateFTYP()
+
+	// 计算mdat偏移量 = ftyp大小 + moov大小
+	// 注意：先生成moov（里面包含stco偏移），然后修正偏移量
+	moovData := w.generateMOOV(uint32(mdatSize), avcC)
+
+	// 修正stco中的chunk_offset为正确的mdat位置
+	mdatOffset := uint32(len(ftyp) + len(moovData))
+	w.patchSTCOOffset(moovData, mdatOffset)
+
 	// 创建MP4文件
 	mp4File, err := os.Create(w.currentPath)
 	if err != nil {
@@ -247,14 +266,7 @@ func (w *MP4Writer) finalizeSegmentLocked() error {
 	}
 	defer mp4File.Close()
 
-	// 生成avcC描述符
-	avcC := w.generateAVCC()
-
-	// 生成moov box
-	moovData := w.generateMOOV(uint32(mdatSize), avcC)
-
 	// 写入ftyp box
-	ftyp := w.generateFTYP()
 	if _, err := mp4File.Write(ftyp); err != nil {
 		return err
 	}
@@ -273,11 +285,12 @@ func (w *MP4Writer) finalizeSegmentLocked() error {
 
 	// 关闭临时文件
 	w.currentFile.Close()
+	w.currentFile = nil
 
 	// 删除临时文件
-	tmpPath := w.currentPath + ".tmp"
-	if _, err := os.Stat(tmpPath); err == nil {
-		os.Remove(tmpPath)
+	if w.tempFilePath != "" {
+		os.Remove(w.tempFilePath)
+		w.tempFilePath = ""
 	}
 
 	log.Printf("segment finalized: %s, frames: %d", w.currentPath, len(w.samples))
@@ -630,6 +643,24 @@ func (w *MP4Writer) generateSTCO() []byte {
 	return stco
 }
 
+// patchSTCOOffset 修正stco box中的chunk_offset
+// stco结构: [4 size][4 "stco"][4 version/flags][4 entry_count][4 offset]
+func (w *MP4Writer) patchSTCOOffset(moovData []byte, offset uint32) {
+	// 查找stco box
+	stcoTag := []byte{0x73, 0x74, 0x63, 0x6f} // "stco"
+	for i := 0; i < len(moovData)-4; i++ {
+		if moovData[i] == stcoTag[0] && moovData[i+1] == stcoTag[1] &&
+			moovData[i+2] == stcoTag[2] && moovData[i+3] == stcoTag[3] {
+			// stco box偏移字段在: box_header(8) + version_flags(4) + entry_count(4) = 16
+			offsetPos := i + 16
+			if offsetPos+4 <= len(moovData) {
+				binary.BigEndian.PutUint32(moovData[offsetPos:offsetPos+4], offset)
+				return
+			}
+		}
+	}
+}
+
 // generateMDIA 生成mdia box
 func (w *MP4Writer) generateMDIA(mdhd, minf []byte) []byte {
 	box := make([]byte, 0, 8+len(mdhd)+len(minf))
@@ -665,6 +696,9 @@ func (w *MP4Writer) newSegmentLocked() error {
 	if w.currentFile != nil {
 		w.currentFile.Close()
 	}
+	if w.tempFilePath != "" {
+		os.Remove(w.tempFilePath)
+	}
 
 	now := time.Now()
 	filename := now.Format("2006-01-02_15-04-05") + ".mp4"
@@ -673,13 +707,12 @@ func (w *MP4Writer) newSegmentLocked() error {
 	w.frameCount = 0
 	w.samples = make([]sampleEntry, 0)
 
-	// 创建临时数据文件
+	// 创建临时数据文件（保持打开状态）
 	tmpFile, err := os.CreateTemp(w.dir, "mp4tmp_*.dat")
 	if err != nil {
 		return fmt.Errorf("create temp file failed: %w", err)
 	}
-	tmpFile.Close()
-	os.Remove(tmpFile.Name())
+	w.tempFilePath = tmpFile.Name()
 	w.currentFile = tmpFile
 
 	log.Printf("new segment: %s", w.currentPath)
@@ -702,12 +735,16 @@ func (w *MP4Writer) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	w.closed := true
+	w.closed = true
 	if w.currentFile != nil {
 		// 完成当前分段
 		w.finalizeSegmentLocked()
 		err := w.currentFile.Close()
 		w.currentFile = nil
+		if w.tempFilePath != "" {
+			os.Remove(w.tempFilePath)
+			w.tempFilePath = ""
+		}
 		return err
 	}
 	return nil

@@ -137,6 +137,25 @@ func (w *WebRTC) WriteVideoFrame(pkt interface{}) error {
 	return nil
 }
 
+// WriteRawNALU 写入原始NALU数据到WebRTC
+func (w *WebRTC) WriteRawNALU(nalus [][]byte, keyFrame bool) error {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	if !w.connected || w.videoTrack == nil {
+		return nil
+	}
+
+	for _, nalu := range nalus {
+		if len(nalu) > 0 {
+			if _, err := w.videoTrack.Write(nalu); err != nil {
+				return fmt.Errorf("write NALU failed: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
 // HandleSignal 处理信令
 func (w *WebRTC) HandleSignal(msg *SignalMessage) error {
 	w.mu.Lock()

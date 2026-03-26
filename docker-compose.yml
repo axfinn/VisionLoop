@@ -1,0 +1,107 @@
+# VisionLoop Docker Compose 编排
+# 用于容器化部署 VisionLoop 智能监控系统
+
+version: '3.8'
+
+services:
+  # 主服务 - Go HTTP 服务器 + WebRTC
+  visionloop:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: visionloop
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # 录像存储卷
+      - visionloop_clips:/app/clips
+      # 事件存储卷
+      - visionloop_events:/app/events
+      # 截图存储卷
+      - visionloop_screenshots:/app/screenshots
+      # 日志目录
+      - ./logs:/app/logs
+      # 配置文件
+      - ./config.yaml:/app/config.yaml:ro
+    environment:
+      # 时区设置
+      - TZ=Asia/Shanghai
+      # 日志级别
+      - GOCV_LOG_LEVEL=error
+      # Python 检测进程配置
+      - DETECTION_ENABLED=true
+      - DETECTION_SOCKET=/tmp/visionloop_det.sock
+    networks:
+      - visionloop_net
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/storage"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # 依赖检测服务 (可选)
+    depends_on:
+      visionloop-detect:
+        condition: service_healthy
+
+  # 检测服务 - Python YOLOv8 检测
+  visionloop-detect:
+    build:
+      context: .
+      dockerfile: Dockerfile.detection
+    container_name: visionloop-detect
+    restart: unless-stopped
+    volumes:
+      # 共享socket用于IPC通信
+      - visionloop_socket:/tmp
+      # 截图目录 (与主服务共享)
+      - visionloop_screenshots:/app/screenshots
+    environment:
+      - TZ=Asia/Shanghai
+      - DETECTION_SOCKET=/tmp/visionloop_det.sock
+      - DETECTION_API=http://visionloop:8080
+      # YOLOv8 配置
+      - YOLO_MODEL=medium
+      - YOLO_CONF_THRESHOLD=0.5
+      - YOLO_IOU_THRESHOLD=0.45
+    networks:
+      - visionloop_net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.connect(('/tmp/visionloop_det.sock', 1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    # 检测服务为可选，注释下行以禁用
+    profiles:
+      - detection
+
+# 网络配置
+networks:
+  visionloop_net:
+    driver: bridge
+
+# 卷配置 - 持久化存储
+volumes:
+  visionloop_clips:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./clips
+  visionloop_events:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./events
+  visionloop_screenshots:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./screenshots
+  visionloop_socket:
+    driver: local

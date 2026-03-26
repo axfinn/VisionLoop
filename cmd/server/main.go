@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"syscall"
@@ -91,7 +92,21 @@ func main() {
 	detIPC, err := ipc.NewDetectionIPC(socketPath)
 	if err != nil {
 		log.Printf("WARNING: detection IPC init failed: %v", err)
+	}
+
+	// 启动Python检测进程
+	var detProc *exec.Cmd
+	detProc, err = startDetectionProcess(socketPath)
+	if err != nil {
+		log.Printf("WARNING: detection process start failed: %v", err)
 	} else {
+		defer func() {
+			if detProc != nil && detProc.Process != nil {
+				detProc.Process.Kill()
+			}
+		}()
+	}
+	if detIPC != nil {
 		defer detIPC.Close()
 	}
 
@@ -157,23 +172,31 @@ type Config struct {
 
 // runEncodeLoop 主编码循环
 func runEncodeLoop(ctx context.Context, frameCh <-chan *capture.Frame, enc *encoder.Encoder, mp4 *mp4.MP4Writer, wrtc *webrtc.WebRTC, detIPC *ipc.DetectionIPC, gc *storage.GC) {
+	// 500ms定时器用于GC和IPC
 	ticker := time.NewTicker(500 * time.Millisecond)
-	naluTicker := time.NewTicker(40 * time.Millisecond) // 25fps, 每帧约40ms
+	// 40ms定时器用于NALU获取 (25fps)
+	naluTicker := time.NewTicker(40 * time.Millisecond)
 	defer ticker.Stop()
 	defer naluTicker.Stop()
 
+	// 用于IPC的帧缓冲（非阻塞发送）
+	var latestFrame *capture.Frame
 	frameCount := int64(0)
 
 	for {
 		select {
 		case <-ctx.Done():
+			// 清理
+			if latestFrame != nil {
+				latestFrame.Release()
+			}
 			return
 		case frame := <-frameCh:
 			if frame == nil {
 				continue
 			}
 			// 编码
-			recPacket, monPacket, err := enc.EncodeFrame(frame, true, true)
+			_, _, err := enc.EncodeFrame(frame, true, true)
 			if err != nil {
 				log.Printf("encode error: %v", err)
 				frame.Release()
@@ -181,18 +204,14 @@ func runEncodeLoop(ctx context.Context, frameCh <-chan *capture.Frame, enc *enco
 			}
 			frameCount++
 
-			// 监看路（直接发送）
-			if monPacket != nil {
-				if err := wrtc.WriteVideoFrame(monPacket); err != nil {
-					log.Printf("webrtc write error: %v", err)
-				}
-				monPacket.Release()
+			// 保存最新帧用于IPC（500ms发送一次）
+			if latestFrame != nil {
+				latestFrame.Release()
 			}
-
-			frame.Release()
+			latestFrame = frame
 
 		case <-naluTicker.C:
-			// 从ffmpeg获取编码好的NALU并写入MP4
+			// 获取录制NALU并写入MP4
 			nalus := enc.GetRecordNALUs()
 			for i, nalu := range nalus {
 				isKeyFrame := (i == 0 && frameCount%150 == 1)
@@ -201,11 +220,64 @@ func runEncodeLoop(ctx context.Context, frameCh <-chan *capture.Frame, enc *enco
 				}
 			}
 
+			// 获取监看NALU并发送到WebRTC
+			monitorNalus := enc.GetMonitorNALUs()
+			if len(monitorNalus) > 0 {
+				if err := wrtc.WriteRawNALU(monitorNalus, frameCount%150 == 1); err != nil {
+					log.Printf("webrtc write error: %v", err)
+				}
+			}
+
 		case <-ticker.C:
+			// 发送最新帧到检测进程（非阻塞，每500ms发送一次）
+			if latestFrame != nil && detIPC != nil && detIPC.IsConnected() {
+				if err := detIPC.SendFrame(latestFrame); err != nil {
+					// 检测进程断开连接时不阻塞主循环
+				}
+				// 发送后释放帧
+				latestFrame.Release()
+				latestFrame = nil
+			}
+
 			// 定期检查存储GC
 			if err := gc.CheckAndCleanup(); err != nil {
 				log.Printf("gc error: %v", err)
 			}
 		}
 	}
+}
+
+// startDetectionProcess 启动Python检测进程
+func startDetectionProcess(socketPath string) (*exec.Cmd, error) {
+	// 查找Python检测脚本
+	execPath, err := os.Executable()
+	if err != nil {
+		execPath = os.Args[0]
+	}
+	execDir := filepath.Dir(execPath)
+	detScript := filepath.Join(execDir, "detection", "main.py")
+
+	// 如果脚本不存在，尝试当前目录
+	if _, err := os.Stat(detScript); os.IsNotExist(err) {
+		detScript = filepath.Join("detection", "main.py")
+	}
+
+	// 检查脚本是否存在
+	if _, err := os.Stat(detScript); os.IsNotExist(err) {
+		return nil, fmt.Errorf("detection script not found: %s", detScript)
+	}
+
+	// 启动Python检测进程
+	cmd := exec.Command("python", detScript,
+		"--socket", socketPath,
+		"--api", "http://localhost:8080")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("start detection process failed: %w", err)
+	}
+
+	log.Printf("detection process started (PID: %d)", cmd.Process.Pid)
+	return cmd, nil
 }

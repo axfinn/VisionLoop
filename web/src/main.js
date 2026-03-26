@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import { createPinia } from 'pinia'
+import 'video.js'  // 确保video.js被bundled
 import App from './App.vue'
 
 const routes = [

@@ -7,45 +7,10 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0f0f; color: #fff; }
-    #app { min-height: 100vh; }
-    .navbar { background: #1a1a1a; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #333; }
-    .navbar h1 { font-size: 1.5rem; color: #00d4ff; }
-    .navbar nav { display: flex; gap: 1.5rem; }
-    .navbar nav a { color: #aaa; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px; transition: all 0.2s; }
-    .navbar nav a:hover, .navbar nav a.active { color: #fff; background: #00d4ff22; }
-    .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
-    .card { background: #1a1a1a; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; border: 1px solid #333; }
-    .card h2 { font-size: 1.2rem; margin-bottom: 1rem; color: #00d4ff; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
-    .btn { background: #00d4ff; color: #000; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
-    .btn:hover { background: #00b8e6; }
-    .btn-danger { background: #ff4444; color: #fff; }
-    .btn-danger:hover { background: #cc0000; }
-    input, select { background: #2a2a2a; border: 1px solid #444; color: #fff; padding: 0.5rem; border-radius: 4px; }
-    .event-badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
-    .event-fall { background: #ff6b6b; }
-    .event-cry { background: #ffd93d; color: #000; }
-    .event-noise { background: #6bcb77; }
-    .event-intruder { background: #9b59b6; }
-    .loading { display: flex; justify-content: center; align-items: center; min-height: 200px; color: #666; }
-    .empty { text-align: center; padding: 3rem; color: #666; }
   </style>
 </head>
 <body>
-  <div id="app">
-    <header class="navbar">
-      <h1>VisionLoop</h1>
-      <nav>
-        <router-link to="/">实时监看</router-link>
-        <router-link to="/playback">历史回放</router-link>
-        <router-link to="/events">事件中心</router-link>
-        <router-link to="/settings">设置</router-link>
-      </nav>
-    </header>
-    <main class="container">
-      <router-view></router-view>
-    </main>
-  </div>
+  <div id="app"></div>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

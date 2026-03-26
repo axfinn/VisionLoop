@@ -1,32 +1,46 @@
+# ============================================================
+# VisionLoop 配置文件
+# 详细说明请参考: CONFIG.md
+# ============================================================
+
+# HTTP 服务器配置
 server:
-  port: 8080
+  port: 8080              # HTTP 监听端口
 
+# 存储配置
 storage:
-  max_gb: 50
-  clip_dir: ./clips
-  event_dir: ./events
-  screenshot_dir: ./screenshots
+  max_gb: 50             # 最大存储空间(GB)，超限自动删除最旧录像
+  clip_dir: ./clips       # MP4 录像文件存储目录
+  event_dir: ./events     # 事件数据(JSON)存储目录
+  screenshot_dir: ./screenshots  # 事件截图(JPEG)存储目录
 
+# 摄像头采集配置
 capture:
-  device: 0
-  width: 640
-  height: 480
-  fps: 25
+  device: 0              # 摄像头设备ID (Linux: /dev/video0, Windows: 0)
+  width: 640             # 采集宽度(像素)，影响画质和带宽
+  height: 480            # 采集高度(像素)
+  fps: 25                # 采集帧率，建议 25-30
 
+# 视频编码配置
 encoding:
-  record_bitrate: 4000000  # 4Mbps
-  monitor_bitrate: 500000   # 500kbps
-  segment_min: 5
-  # 硬件编码优先级: h264_qsv > h264_nvenc > libx264
+  record_bitrate: 4000000  # 录制流码率 (4Mbps)
+  monitor_bitrate: 500000  # 监看流码率 (500kbps)
+  segment_min: 5          # MP4 分段时长 (分钟)
+  # 硬件编码器优先级: auto > qsv > nvenc > libx264
+  # auto: 自动探测可用编码器
+  # qsv: Intel Quick Sync Video (需要 Intel CPU)
+  # nvenc: NVIDIA NVENC (需要 NVIDIA 显卡)
+  # libx264: CPU 软件编码 (兼容性最好)
   hw_encoder: auto
 
+# 事件检测配置
 detection:
-  enabled: true
-  socket: /tmp/visionloop_det.sock
-  api_base: http://localhost:8080
-  detect_fall: true
-  detect_cry: true
-  detect_noise: true
-  detect_intruder: true
-  sensitivity: 0.7
-  frame_interval_ms: 500
+  enabled: true           # 是否启用检测进程
+  socket: /tmp/visionloop_det.sock  # IPC Unix Socket 路径
+  api_base: http://localhost:8080   # Go 服务 API 地址
+  detect_fall: true       # 摔倒检测 (YOLOv8 姿态)
+  detect_cry: true        # 哭声检测 (音频频谱分析)
+  detect_noise: true      # 异响检测 (音频频谱分析)
+  detect_intruder: true    # 陌生人闯入检测 (YOLOv8 人形)
+  sensitivity: 0.7         # 检测灵敏度 (0.0-1.0)
+  frame_interval_ms: 500   # 抽帧间隔 (毫秒)

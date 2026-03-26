@@ -59,6 +59,15 @@ func (s *Server) setupRouter() {
 	r.Static("/static", "./web/dist")
 	r.GET("/", s.serveIndex)
 
+	// Vue Router fallback - 所有非API路由返回index.html
+	r.GET("/:path", func(c *gin.Context) {
+		if strings.HasPrefix(c.Param("path"), "api/") {
+			c.JSON(404, gin.H{"error": "not found"})
+			return
+		}
+		s.serveIndex(c)
+	})
+
 	// API
 	api := r.Group("/api")
 	{

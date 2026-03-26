@@ -1,0 +1,39 @@
+# Autodev logs
+.autodev/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Go
+*.exe
+*.dll
+*.exe~
+VisionLoop.exe
+
+# Node
+node_modules/
+web/dist/
+web/node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Detection models (large files)
+*.pt
+*.onnx
+!detection/*.py
