@@ -27,9 +27,11 @@ show_status() {
     echo ""
 
     echo -e "${YELLOW}=== Uncommitted Changes ===${NC}"
-    if git diff --stat | grep -v "^$" | tail -n +2; then
+    CHANGES=$(git diff --stat | tail -n +2 | grep -v "^$" | wc -l)
+    if [ "$CHANGES" -gt 0 ]; then
+        git diff --stat | tail -n +2
         echo ""
-        echo -e "${GREEN}Changes detected${NC}"
+        echo -e "${GREEN}Changes detected ($CHANGES files)${NC}"
     else
         echo -e "${GREEN}No uncommitted changes${NC}"
     fi
