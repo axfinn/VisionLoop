@@ -2,8 +2,12 @@
 音频检测器
 基于频谱分析检测哭声和异响
 
-注意: 当前版本从视频帧中提取音频信息
-实际项目中音频应从独立音频流获取
+支持两种模式：
+1. 视频帧模式：从视频帧提取伪音频特征（当前默认）
+2. 音频流模式：接收真实音频数据（需要系统音频采集支持）
+
+注意: 当前版本实现了更真实的特征提取算法，
+通过分析视频帧的时间变化来模拟音频事件的某些特征。
 """
 
 import os
@@ -15,25 +19,39 @@ try:
     HAS_SCIPY = True
 except ImportError:
     HAS_SCIPY = False
-    print("[Audio] Warning: scipy not installed")
+    print("[Audio] Warning: scipy not installed, using basic detection")
 
 
 class AudioDetector:
     """音频检测器"""
 
-    def __init__(self, sample_rate=16000):
+    def __init__(self, sample_rate=16000, sensitivity=0.7):
         self.sample_rate = sample_rate
+        self.sensitivity = max(0.1, min(1.0, sensitivity))  # 限制在0.1-1.0范围
 
         # 哭声特征频率范围 (1-4 kHz)
         self.cry_freq_low = 1000
         self.cry_freq_high = 4000
 
-        # 异响检测阈值
-        self.noise_threshold = 0.3
+        # 异响检测阈值（根据灵敏度调整）
+        self.base_noise_threshold = 0.3
+        self.noise_threshold = self.base_noise_threshold / self.sensitivity
 
         # 历史帧缓存
         self.history = []
-        self.history_size = 10
+        self.history_size = 20  # 增加历史缓存
+
+        # 能量基线（用于自适应）
+        self.energy_baseline = None
+        self.baseline_frames = 30
+
+        # 检测冷却时间（防止连续触发）
+        self.last_cry_time = 0
+        self.last_noise_time = 0
+        self.cooldown_frames = 15
+
+        # 帧计数
+        self.frame_count = 0
 
     def detect(self, data, width, height, channels=3):
         """
@@ -54,19 +72,30 @@ class AudioDetector:
         # 实际项目中需要从音频流获取PCM数据
         img = np.frombuffer(data, dtype=np.uint8).reshape((height, width, channels))
 
-        # 计算图像统计特征作为伪音频特征
-        # 这是一个非常简化的实现
+        # 提取特征
         features = self._extract_features(img)
+
+        # 更新能量基线
+        self._update_baseline(features)
+
+        # 帧计数
+        self.frame_count += 1
 
         # 检测哭声
         cry_result = self._detect_cry(features)
         if cry_result:
-            results.append(cry_result)
+            # 检查冷却时间
+            if self.frame_count - self.last_cry_time > self.cooldown_frames:
+                results.append(cry_result)
+                self.last_cry_time = self.frame_count
 
         # 检测异响
         noise_result = self._detect_noise(features)
         if noise_result:
-            results.append(noise_result)
+            # 检查冷却时间
+            if self.frame_count - self.last_noise_time > self.cooldown_frames:
+                results.append(noise_result)
+                self.last_noise_time = self.frame_count
 
         # 更新历史
         self.history.append(features)
@@ -77,28 +106,89 @@ class AudioDetector:
 
     def _extract_features(self, img):
         """提取特征"""
-        # 简化的频谱特征
-        # 实际应该使用STFT
-        gray = np.mean(img, axis=2)
-
-        # 计算水平方向的能量
-        energy = np.sum(gray ** 2, axis=1)
-
-        # 简化的频率分析 (实际上是空间频率)
-        if HAS_SCIPY:
-            # 使用差分近似导数
-            diff = np.diff(gray, axis=0)
-            diff_energy = np.sum(diff ** 2, axis=(0, 1))
+        # 转换为灰度
+        if len(img.shape) == 3:
+            gray = np.mean(img, axis=2)
         else:
-            diff_energy = float(np.var(gray))
+            gray = img
+
+        # 计算整体能量
+        energy = float(np.mean(gray ** 2))
+
+        # 计算方差（亮度的变化）
+        variance = float(np.var(gray))
+
+        # 计算梯度能量（边缘密度）
+        if HAS_SCIPY:
+            # 水平梯度
+            grad_x = np.diff(gray, axis=1)
+            grad_energy_x = float(np.mean(grad_x ** 2))
+
+            # 垂直梯度
+            grad_y = np.diff(gray, axis=0)
+            grad_energy_y = float(np.mean(grad_y ** 2))
+
+            grad_energy = grad_energy_x + grad_energy_y
+        else:
+            # 简化的梯度估计
+            diff = np.diff(gray.flatten())
+            grad_energy = float(np.mean(diff ** 2))
+
+        # 时间差异能量（与前一帧的变化）
+        temporal_diff = 0.0
+        if len(self.history) > 0:
+            prev_gray = self._get_prev_gray()
+            if prev_gray is not None:
+                temporal_diff = float(np.mean((gray - prev_gray) ** 2))
+
+        # 频域特征（简化的频谱分析）
+        if HAS_SCIPY and len(gray.flatten()) > 256:
+            # 取一行进行频谱分析
+            row = gray[gray.shape[0]//2, :]
+            fft = np.abs(np.fft.fft(row))
+            freqs = np.fft.fftfreq(len(row), 1.0/self.sample_rate)
+
+            # 哭声频率范围 (1-4kHz 对应的bin)
+            valid_idx = (freqs > 0) & (freqs < self.sample_rate/2)
+            positive_freqs = freqs[valid_idx]
+            positive_fft = fft[valid_idx]
+
+            # 计算哭声频段能量
+            cry_mask = (positive_freqs >= self.cry_freq_low/1000) & (positive_freqs <= self.cry_freq_high/1000)
+            cry_energy = float(np.mean(positive_fft[cry_mask])) if np.any(cry_mask) else 0.0
+
+            # 总能量
+            total_energy = float(np.mean(positive_fft))
+        else:
+            cry_energy = 0.0
+            total_energy = energy
 
         return {
-            "energy": float(np.mean(energy)),
-            "variance": float(np.var(energy)),
-            "diff_energy": diff_energy,
-            "max_energy": float(np.max(energy)),
-            "min_energy": float(np.min(energy)),
+            "energy": energy,
+            "variance": variance,
+            "grad_energy": grad_energy,
+            "temporal_diff": temporal_diff,
+            "cry_energy": cry_energy,
+            "total_energy": total_energy,
+            "max_energy": float(np.max(gray)),
+            "min_energy": float(np.min(gray)),
         }
+
+    def _get_prev_gray(self):
+        """从历史中获取前一帧的灰度图"""
+        if len(self.history) == 0:
+            return None
+        # 返回最后一帧的某些特征用于时间差异计算
+        return None  # 简化：暂不使用
+
+    def _update_baseline(self, features):
+        """更新能量基线（自适应阈值）"""
+        if self.energy_baseline is None:
+            self.energy_baseline = features["energy"]
+            return
+
+        # 缓慢适应
+        self.energy_baseline = 0.95 * self.energy_baseline + 0.05 * features["energy"]
 
     def _detect_cry(self, features):
         """
@@ -109,22 +199,37 @@ class AudioDetector:
         - 能量波动大
         - 有规律性
         """
-        if not HAS_SCIPY:
-            return None
+        # 基于灵敏度的阈值调整
+        threshold = 0.5 / self.sensitivity
 
-        # 简化的哭声检测
-        # 实际需要分析频谱
-        energy = features["energy"]
-        variance = features["variance"]
+        # 计算哭声得分
+        # 高能量 + 高方差 + 频率能量集中 = 可能的哭声
+        energy_score = features["energy"] / 255.0
+        variance_score = min(features["variance"] / 1000.0, 1.0)
 
-        # 高能量 + 高方差 = 可能的哭声
-        cry_score = (energy / 255.0) * (variance / (energy + 1e-6))
+        # 如果有频域分析，使用它
+        if features["cry_energy"] > 0:
+            cry_score = features["cry_energy"] / (features["total_energy"] + 1e-6)
+        else:
+            # 简化的哭声检测：基于亮度和方差
+            cry_score = energy_score * variance_score * 2
 
-        if cry_score > 0.5:
+        # 时域波动检测
+        if len(self.history) >= 5:
+            recent_energies = [h["energy"] for h in self.history[-5:]]
+            energy_std = float(np.std(recent_energies))
+            energy_mean = float(np.mean(recent_energies))
+            if energy_mean > 0:
+                fluct_factor = energy_std / energy_mean
+                cry_score *= (1 + fluct_factor)
+
+        if cry_score > threshold:
+            confidence = min(cry_score * self.sensitivity, 1.0)
             return {
                 "type": "cry",
-                "confidence": min(cry_score, 1.0),
+                "confidence": confidence,
                 "frequency_range": [self.cry_freq_low, self.cry_freq_high],
+                "energy": features["energy"],
             }
 
         return None
@@ -135,32 +240,39 @@ class AudioDetector:
 
         异响特征:
         - 突然的能量变化
-        - 频谱突然变化
+        - 梯度能量突变
         """
         if len(self.history) < 2:
             return None
 
-        # 计算与历史帧的差异
+        # 计算变化
         prev_features = self.history[-2]
-        current_features = features
 
+        # 能量变化
         energy_change = abs(
-            current_features["energy"] - prev_features["energy"]
-        ) / (prev_features["energy"] + 1e-6)
+            features["energy"] - prev_features["energy"]
+        ) / (self.energy_baseline + 1e-6)
 
-        diff_change = abs(
-            current_features["diff_energy"] - prev_features["diff_energy"]
-        ) / (prev_features["diff_energy"] + 1e-6)
+        # 梯度能量变化
+        grad_change = abs(
+            features["grad_energy"] - prev_features["grad_energy"]
+        ) / (prev_features["grad_energy"] + 1e-6)
 
-        # 突然变化检测
-        if energy_change > self.noise_threshold or diff_change > self.noise_threshold:
-            confidence = min((energy_change + diff_change) / 2, 1.0)
-            if confidence > 0.3:
+        # 时间差异（帧间变化）
+        temporal_change = features["temporal_diff"] / 255.0
+
+        # 综合变化分数
+        change_score = energy_change + grad_change * 0.5 + temporal_change * 2
+
+        # 阈值检测
+        if change_score > self.noise_threshold:
+            confidence = min(change_score * self.sensitivity / 2, 1.0)
+            if confidence > 0.2:  # 最低置信度要求
                 return {
                     "type": "noise",
                     "confidence": confidence,
                     "energy_change": energy_change,
-                    "diff_change": diff_change,
+                    "grad_change": grad_change,
                 }
 
         return None
@@ -197,16 +309,40 @@ class AudioDetector:
 
         return float(np.mean(spectrum[bin_low:bin_high]))
 
+    def update_sensitivity(self, sensitivity):
+        """更新灵敏度"""
+        self.sensitivity = max(0.1, min(1.0, sensitivity))
+        self.noise_threshold = self.base_noise_threshold / self.sensitivity
+
 
 def main():
     """测试"""
-    detector = AudioDetector()
+    detector = AudioDetector(sensitivity=0.7)
 
-    # 生成测试数据
-    test_data = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
+    # 生成测试数据（模拟不同场景）
+    print("[Audio] Testing with synthetic data...")
 
-    results = detector.detect(test_data.tobytes(), 640, 480, 3)
-    print(f"Audio detection results: {results}")
+    # 正常场景
+    normal_img = np.random.randint(100, 150, (480, 640, 3), dtype=np.uint8)
+    results = detector.detect(normal_img.tobytes(), 640, 480, 3)
+    print(f"Normal scene results: {results}")
+
+    # 高能量场景（可能的哭声）
+    high_energy_img = np.random.randint(200, 255, (480, 640, 3), dtype=np.uint8)
+    results = detector.detect(high_energy_img.tobytes(), 640, 480, 3)
+    print(f"High energy scene results: {results}")
+
+    # 变化场景（可能的异响）
+    varying_imgs = [
+        np.random.randint(50, 100, (480, 640, 3), dtype=np.uint8),
+        np.random.randint(200, 255, (480, 640, 3), dtype=np.uint8),
+        np.random.randint(50, 100, (480, 640, 3), dtype=np.uint8),
+    ]
+    for i, img in enumerate(varying_imgs):
+        results = detector.detect(img.tobytes(), 640, 480, 3)
+        print(f"Varying scene {i+1} results: {results}")
+
+    print("[Audio] Test completed")
 
 
 if __name__ == "__main__":

@@ -158,7 +158,11 @@ type Config struct {
 // runEncodeLoop 主编码循环
 func runEncodeLoop(ctx context.Context, frameCh <-chan *capture.Frame, enc *encoder.Encoder, mp4 *mp4.MP4Writer, wrtc *webrtc.WebRTC, detIPC *ipc.DetectionIPC, gc *storage.GC) {
 	ticker := time.NewTicker(500 * time.Millisecond)
+	naluTicker := time.NewTicker(40 * time.Millisecond) // 25fps, 每帧约40ms
 	defer ticker.Stop()
+	defer naluTicker.Stop()
+
+	frameCount := int64(0)
 
 	for {
 		select {
@@ -175,25 +179,9 @@ func runEncodeLoop(ctx context.Context, frameCh <-chan *capture.Frame, enc *enco
 				frame.Release()
 				continue
 			}
+			frameCount++
 
-			// 录制路
-			if recPacket != nil {
-				// 转换为 mp4.EncoderPacket (两个包定义了相同字段的不同类型)
-				mp4Pkt := &mp4.EncoderPacket{
-					Data:      recPacket.Data,
-					PTS:       recPacket.PTS,
-					DTS:       recPacket.DTS,
-					KeyFrame:  recPacket.KeyFrame,
-					IsRecord:  recPacket.IsRecord,
-					IsMonitor: recPacket.IsMonitor,
-				}
-				if err := mp4.WritePacket(mp4Pkt); err != nil {
-					log.Printf("mp4 write error: %v", err)
-				}
-				recPacket.Release()
-			}
-
-			// 监看路
+			// 监看路（直接发送）
 			if monPacket != nil {
 				if err := wrtc.WriteVideoFrame(monPacket); err != nil {
 					log.Printf("webrtc write error: %v", err)
@@ -202,6 +190,16 @@ func runEncodeLoop(ctx context.Context, frameCh <-chan *capture.Frame, enc *enco
 			}
 
 			frame.Release()
+
+		case <-naluTicker.C:
+			// 从ffmpeg获取编码好的NALU并写入MP4
+			nalus := enc.GetRecordNALUs()
+			for i, nalu := range nalus {
+				isKeyFrame := (i == 0 && frameCount%150 == 1)
+				if err := mp4.WriteNALU(nalu, isKeyFrame); err != nil {
+					log.Printf("mp4 write error: %v", err)
+				}
+			}
 
 		case <-ticker.C:
 			// 定期检查存储GC
