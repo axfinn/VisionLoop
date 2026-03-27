@@ -172,14 +172,32 @@ func (w *WebRTC) WriteRawNALU(nalus [][]byte, keyFrame bool) error {
 // HandleSignal 处理信令
 func (w *WebRTC) HandleSignal(msg *SignalMessage) error {
 	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	if w.peerConn == nil {
+		w.mu.Unlock()
 		return fmt.Errorf("peer connection not initialized")
+	}
+
+	// 检查是否需要重置连接
+	needReset := false
+	if msg.Type == "offer" && w.connected {
+		needReset = true
+	}
+
+	if needReset {
+		w.connected = false
+		oldPC := w.peerConn
+		w.mu.Unlock()
+		oldPC.Close()
+		w.mu.Lock()
+		if err := w.setupPeerConnection(); err != nil {
+			w.mu.Unlock()
+			return fmt.Errorf("reset peer connection failed: %w", err)
+		}
 	}
 
 	switch msg.Type {
 	case "offer":
+		log.Printf("received offer, SDP length: %d", len(msg.Payload))
 		// 解析 offer payload: { type: 'offer', sdp: '...' }
 		var offerPayload struct {
 			Type string `json:"type"`
@@ -187,21 +205,28 @@ func (w *WebRTC) HandleSignal(msg *SignalMessage) error {
 		}
 		if err := json.Unmarshal(msg.Payload, &offerPayload); err != nil {
 			// 兜底: 直接当SDP字符串处理（旧格式兼容）
+			log.Printf("offer parse failed, using raw payload")
 			offerPayload.SDP = string(msg.Payload)
 		}
+		log.Printf("offer SDP: %.100s...", offerPayload.SDP)
 		if err := w.peerConn.SetRemoteDescription(pionwebrtc.SessionDescription{
 			Type: pionwebrtc.SDPTypeOffer,
 			SDP:  offerPayload.SDP,
 		}); err != nil {
+			log.Printf("SetRemoteDescription error: %v", err)
+			w.mu.Unlock()
 			return err
 		}
+		log.Printf("remote description set successfully")
 
 		// 创建answer
 		answer, err := w.peerConn.CreateAnswer(nil)
 		if err != nil {
+			w.mu.Unlock()
 			return err
 		}
 		if err := w.peerConn.SetLocalDescription(answer); err != nil {
+			w.mu.Unlock()
 			return err
 		}
 
@@ -210,6 +235,8 @@ func (w *WebRTC) HandleSignal(msg *SignalMessage) error {
 			Type:    "answer",
 			Payload: mustMarshal(answer),
 		}
+		log.Printf("answer sent")
+		w.mu.Unlock()
 
 	case "answer":
 		// answer payload: { type: 'answer', sdp: '...' }
@@ -220,17 +247,25 @@ func (w *WebRTC) HandleSignal(msg *SignalMessage) error {
 		if err := json.Unmarshal(msg.Payload, &answerPayload); err != nil {
 			answerPayload.SDP = string(msg.Payload)
 		}
-		return w.peerConn.SetRemoteDescription(pionwebrtc.SessionDescription{
+		err := w.peerConn.SetRemoteDescription(pionwebrtc.SessionDescription{
 			Type: pionwebrtc.SDPTypeAnswer,
 			SDP:  answerPayload.SDP,
 		})
+		w.mu.Unlock()
+		return err
 
 	case "ice-candidate":
 		var candidate pionwebrtc.ICECandidateInit
 		if err := json.Unmarshal(msg.Payload, &candidate); err != nil {
+			w.mu.Unlock()
 			return err
 		}
-		return w.peerConn.AddICECandidate(candidate)
+		err := w.peerConn.AddICECandidate(candidate)
+		w.mu.Unlock()
+		return err
+
+	default:
+		w.mu.Unlock()
 	}
 
 	return nil
