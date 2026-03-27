@@ -56,11 +56,32 @@ func main() {
 	// 初始化存储GC
 	gc := storage.NewGC(cfg.ClipsDir, cfg.MaxStorageGB)
 
-	// 初始化采集
-	cam, err := capture.NewCapture(0) // 默认摄像头
-	if err != nil {
-		log.Printf("WARNING: camera init failed: %v, using test pattern", err)
-		cam = capture.NewTestPattern(640, 480, 25)
+	// 初始化采集 - 优先使用视频文件，摄像头作为备选
+	var cam capture.Capture
+	videoPath := "/Users/finn/Movies/20260204_140354.mp4"
+	if _, statErr := os.Stat(videoPath); statErr == nil {
+		cam, err = capture.NewVideoFileCapture(videoPath, true)
+		if err != nil {
+			log.Printf("WARNING: video file failed: %v, trying camera", err)
+			cam, err = capture.NewCapture(0)
+			if err != nil {
+				log.Printf("WARNING: camera failed: %v, using test pattern", err)
+				cam = capture.NewTestPattern(640, 480, 25)
+			} else {
+				log.Println("camera initialized successfully")
+			}
+		} else {
+			log.Println("video file initialized successfully")
+		}
+	} else {
+		log.Printf("video file not found, trying camera")
+		cam, err = capture.NewCapture(0)
+		if err != nil {
+			log.Printf("WARNING: camera failed: %v, using test pattern", err)
+			cam = capture.NewTestPattern(640, 480, 25)
+		} else {
+			log.Println("camera initialized successfully")
+		}
 	}
 
 	// 初始化编码器
@@ -84,7 +105,10 @@ func main() {
 	defer mp4Writer.Close()
 
 	// 初始化WebRTC
-	wrtc := webrtc.NewWebRTC(enc.Width(), enc.Height())
+	wrtc, err := webrtc.NewWebRTC(enc.Width(), enc.Height())
+	if err != nil {
+		log.Fatal("webrtc init failed:", err)
+	}
 	defer wrtc.Close()
 
 	// 初始化Unix Socket IPC
@@ -196,13 +220,16 @@ func runEncodeLoop(ctx context.Context, frameCh <-chan *capture.Frame, enc *enco
 				continue
 			}
 			// 编码
-			_, _, err := enc.EncodeFrame(frame, true, true)
+			rec, mon, err := enc.EncodeFrame(frame, true, true)
 			if err != nil {
 				log.Printf("encode error: %v", err)
 				frame.Release()
 				continue
 			}
 			frameCount++
+			if frameCount%100 == 0 {
+				log.Printf("encoded %d frames, rec=%v, mon=%v", frameCount, rec != nil, mon != nil)
+			}
 
 			// 保存最新帧用于IPC（500ms发送一次）
 			if latestFrame != nil {

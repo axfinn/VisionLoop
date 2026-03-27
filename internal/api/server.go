@@ -19,6 +19,8 @@ import (
 	"visionloop/internal/webrtc"
 )
 
+var distPath = "./web/dist"
+
 // ServerConfig 服务配置
 type ServerConfig struct {
 	ClipsDir     string
@@ -55,8 +57,8 @@ func (s *Server) setupRouter() {
 	r.Use(corsMiddleware())
 	r.Use(loggerMiddleware())
 
-	// 静态文件
-	r.Static("/static", "./web/dist")
+	// 静态文件 - 挂载到 /assets 路径
+	r.StaticFS("/assets", http.Dir(filepath.Join(distPath, "assets")))
 	r.GET("/", s.serveIndex)
 
 	// Vue Router fallback - 所有非API路由返回index.html
@@ -304,7 +306,7 @@ func (s *Server) handleWebRTCSignal(c *gin.Context) {
 	}
 	defer conn.Close()
 
-	webrtc := s.config.WebRTC
+	webrtcClient := s.config.WebRTC
 	done := make(chan struct{})
 
 	// 读取客户端消息并转发到webrtc
@@ -321,7 +323,7 @@ func (s *Server) handleWebRTCSignal(c *gin.Context) {
 				continue
 			}
 
-			if err := webrtc.HandleSignal(&msg); err != nil {
+			if err := webrtcClient.HandleSignal(&msg); err != nil {
 				log.Printf("handle signal error: %v", err)
 			}
 		}
@@ -330,7 +332,7 @@ func (s *Server) handleWebRTCSignal(c *gin.Context) {
 	// 读取webrtc信号并转发到客户端
 	for {
 		select {
-		case msg, ok := <-webrtc.GetSignalCh():
+		case msg, ok := <-webrtcClient.GetSignalCh():
 			if !ok {
 				return
 			}

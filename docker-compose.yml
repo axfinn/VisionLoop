@@ -41,10 +41,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    # 依赖检测服务 (可选)
-    depends_on:
-      visionloop-detect:
-        condition: service_healthy
+    # 检测服务为可选，不设置自动依赖
 
   # 检测服务 - Python YOLOv8 检测
   visionloop-detect:

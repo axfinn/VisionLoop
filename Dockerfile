@@ -15,13 +15,14 @@ RUN apk add --no-cache \
     musl-dev \
     linux-headers \
     gcc \
-    g++
+    g++ \
+    opencv-dev
 
 # 设置工作目录
 WORKDIR /build
 
 # 复制 go mod 文件
-COPY go.mod go.sum ./
+COPY go.mod ./
 RUN go mod download
 
 # 复制源代码
@@ -33,9 +34,6 @@ COPY --from=alpine:3.18 /usr/lib/libavformat.so* /usr/lib/
 COPY --from=alpine:3.18 /usr/lib/libavutil.so* /usr/lib/
 COPY --from=alpine:3.18 /usr/lib/libswscale.so* /usr/lib/
 COPY --from=alpine:3.18 /usr/lib/libswresample.so* /usr/lib/
-
-# 复制 FFmpeg 头文件
-COPY --from=alpine:3.18 /usr/include/ffmpeg /usr/include/ffmpeg
 
 # 构建 Go 服务
 ENV CGO_ENABLED=1
@@ -50,7 +48,7 @@ RUN apk add --no-cache \
     ffmpeg \
     libstdc++ \
     libgcc \
-    lib羊毛 \
+    libwebp \
     ca-certificates \
     tzdata \
     bash \
@@ -59,8 +57,7 @@ RUN apk add --no-cache \
 # 安装 OpenCV (gocv 依赖)
 RUN apk add --no-cache \
     openblas \
-    libgomp \
-    libpthread
+    libgomp
 
 # 设置环境变量
 ENV CGO_ENABLED=1

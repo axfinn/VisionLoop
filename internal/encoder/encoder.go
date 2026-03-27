@@ -173,7 +173,7 @@ func (enc *ffmpegEncoder) startFFmpeg() error {
 		"-pix_fmt", "yuv420p",    // 输出像素格式
 		"-an",                    // 无音频
 		"-f", "h264",             // 输出格式: H.264裸流
-		"pipe:1"                  // 输出到stdout
+		"pipe:1",                 // 输出到stdout
 	)
 
 	cmd.Stderr = nil // 抑制ffmpeg错误输出
@@ -285,21 +285,18 @@ func (enc *ffmpegEncoder) processBuffer(buffer *[]byte, startCode []byte) {
 }
 
 // encode 编码一帧
-func (enc *ffmpegEncoder) encode(mat gocv.Mat, frameCount int64) *EncoderPacket {
+func (enc *ffmpegEncoder) encode(mat *gocv.Mat, frameCount int64) *EncoderPacket {
 	if mat.Empty() {
 		return nil
 	}
 
 	// 转换颜色空间 BGR -> RGB
 	rgb := gocv.NewMat()
-	gocv.CvtColor(mat, &rgb, gocv.ColorBGRToRGB)
+	gocv.CvtColor(*mat, &rgb, gocv.ColorBGRToRGB)
 	defer rgb.Close()
 
 	// 获取图像数据
-	data, err := rgb.ToBytes()
-	if err != nil {
-		return nil
-	}
+	data := rgb.ToBytes()
 
 	// 写入ffmpeg stdin
 	if _, err := enc.stdin.Write(data); err != nil {

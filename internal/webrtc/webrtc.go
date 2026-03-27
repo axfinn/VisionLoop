@@ -8,28 +8,29 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/webrtc/v3"
+	pionwebrtc "github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v3/pkg/media"
 	"visionloop/internal/encoder"
 	"visionloop/internal/mp4"
 )
-
-// WebRTC Pion WebRTC实现
-type WebRTC struct {
-	mu           sync.RwMutex
-	width        int
-	height       int
-	peerConn     *webrtc.PeerConnection
-	videoTrack   *webrtc.TrackLocalStaticH264
-	connected    bool
-	signalCh     chan *SignalMessage
-	ctx          context.Context
-	cancel       context.CancelFunc
-}
 
 // SignalMessage 信令消息
 type SignalMessage struct {
 	Type    string          `json:"type"` // offer/answer/ice-candidate
 	Payload json.RawMessage `json:"payload,omitempty"`
+}
+
+// WebRTC Pion WebRTC实现
+type WebRTC struct {
+	mu           sync.RWMutex
+	width        int
+	height       int
+	peerConn     *pionwebrtc.PeerConnection
+	videoTrack   *pionwebrtc.TrackLocalStaticSample
+	connected    bool
+	signalCh     chan *SignalMessage
+	ctx          context.Context
+	cancel       context.CancelFunc
 }
 
 // NewWebRTC 创建WebRTC
@@ -54,8 +55,8 @@ func NewWebRTC(width, height int) (*WebRTC, error) {
 
 func (w *WebRTC) setupPeerConnection() error {
 	// 创建配置
-	config := webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{
+	config := pionwebrtc.Configuration{
+		ICEServers: []pionwebrtc.ICEServer{
 			{
 				URLs: []string{"stun:stun.l.google.com:19302"},
 			},
@@ -63,15 +64,15 @@ func (w *WebRTC) setupPeerConnection() error {
 	}
 
 	// 创建PeerConnection
-	pc, err := webrtc.NewPeerConnection(config)
+	pc, err := pionwebrtc.NewPeerConnection(config)
 	if err != nil {
 		return fmt.Errorf("create peer connection failed: %w", err)
 	}
 	w.peerConn = pc
 
 	// 创建H264视频track
-	track, err := webrtc.NewTrackLocalStaticH264(
-		webrtc.RTPCodecCapability{
+	track, err := pionwebrtc.NewTrackLocalStaticSample(
+		pionwebrtc.RTPCodecCapability{
 			MimeType:  "video/h264",
 			ClockRate: 90000,
 			// SDP Fmtp line for baseline profile
@@ -91,7 +92,7 @@ func (w *WebRTC) setupPeerConnection() error {
 	}
 
 	// 设置ICE候选者处理
-	pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
+	pc.OnICECandidate(func(candidate *pionwebrtc.ICECandidate) {
 		if candidate != nil {
 			w.signalCh <- &SignalMessage{
 				Type:    "ice-candidate",
@@ -101,9 +102,9 @@ func (w *WebRTC) setupPeerConnection() error {
 	})
 
 	// 设置连接状态变化
-	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+	pc.OnConnectionStateChange(func(state pionwebrtc.PeerConnectionState) {
 		w.mu.Lock()
-		w.connected = (state == webrtc.PeerConnectionStateConnected)
+		w.connected = (state == pionwebrtc.PeerConnectionStateConnected)
 		w.mu.Unlock()
 
 		log.Printf("peer connection state: %s", state.String())
@@ -123,14 +124,21 @@ func (w *WebRTC) WriteVideoFrame(pkt interface{}) error {
 
 	// 从 EncoderPacket (encoder包) 或 mp4.EncoderPacket 获取数据
 	var data []byte
+	var duration time.Duration
 	switch ep := pkt.(type) {
 	case *encoder.EncoderPacket:
 		data = ep.Data
+		duration = time.Second / 25 // 假设25fps
 	case *mp4.EncoderPacket:
 		data = ep.Data
+		duration = time.Second / 25
 	}
 	if len(data) > 0 {
-		if _, err := w.videoTrack.Write(data); err != nil {
+		sample := media.Sample{
+			Data:     data,
+			Duration: duration,
+		}
+		if err := w.videoTrack.WriteSample(sample); err != nil {
 			return fmt.Errorf("write video frame failed: %w", err)
 		}
 	}
@@ -146,9 +154,14 @@ func (w *WebRTC) WriteRawNALU(nalus [][]byte, keyFrame bool) error {
 		return nil
 	}
 
+	duration := time.Second / 25
 	for _, nalu := range nalus {
 		if len(nalu) > 0 {
-			if _, err := w.videoTrack.Write(nalu); err != nil {
+			sample := media.Sample{
+				Data:     nalu,
+				Duration: duration,
+			}
+			if err := w.videoTrack.WriteSample(sample); err != nil {
 				return fmt.Errorf("write NALU failed: %w", err)
 			}
 		}
@@ -176,8 +189,8 @@ func (w *WebRTC) HandleSignal(msg *SignalMessage) error {
 			// 兜底: 直接当SDP字符串处理（旧格式兼容）
 			offerPayload.SDP = string(msg.Payload)
 		}
-		if err := w.peerConn.SetRemoteDescription(webrtc.SessionDescription{
-			Type: webrtc.SDPTypeOffer,
+		if err := w.peerConn.SetRemoteDescription(pionwebrtc.SessionDescription{
+			Type: pionwebrtc.SDPTypeOffer,
 			SDP:  offerPayload.SDP,
 		}); err != nil {
 			return err
@@ -207,13 +220,13 @@ func (w *WebRTC) HandleSignal(msg *SignalMessage) error {
 		if err := json.Unmarshal(msg.Payload, &answerPayload); err != nil {
 			answerPayload.SDP = string(msg.Payload)
 		}
-		return w.peerConn.SetRemoteDescription(webrtc.SessionDescription{
-			Type: webrtc.SDPTypeAnswer,
+		return w.peerConn.SetRemoteDescription(pionwebrtc.SessionDescription{
+			Type: pionwebrtc.SDPTypeAnswer,
 			SDP:  answerPayload.SDP,
 		})
 
 	case "ice-candidate":
-		var candidate webrtc.ICECandidateInit
+		var candidate pionwebrtc.ICECandidateInit
 		if err := json.Unmarshal(msg.Payload, &candidate); err != nil {
 			return err
 		}
@@ -231,9 +244,7 @@ func (w *WebRTC) GetSignalCh() <-chan *SignalMessage {
 // Close 关闭
 func (w *WebRTC) Close() error {
 	w.cancel()
-	if w.videoTrack != nil {
-		w.videoTrack.Close()
-	}
+	// videoTrack is closed automatically when peerConn is closed
 	if w.peerConn != nil {
 		return w.peerConn.Close()
 	}

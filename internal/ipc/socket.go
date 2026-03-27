@@ -119,10 +119,7 @@ func (ipc *DetectionIPC) SendFrame(frame *capture.Frame) error {
 
 	// 发送图像数据
 	if frame.Img != nil && !frame.Img.Empty() {
-		data, err := frame.Img.ToBytes()
-		if err != nil {
-			return fmt.Errorf("mat to bytes failed: %w", err)
-		}
+		data := frame.Img.ToBytes()
 		if _, err := conn.Write(data); err != nil {
 			ipc.mu.Lock()
 			ipc.connected = false
