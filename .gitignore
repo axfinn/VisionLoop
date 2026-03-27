@@ -37,3 +37,8 @@ Thumbs.db
 *.pt
 *.onnx
 !detection/*.py
+
+# Build outputs
+visionloop
+clips/
+web/package-lock.json
