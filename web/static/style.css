@@ -334,3 +334,5 @@ button.enroll-btn:hover { background: #388bfd; }
 #timeline-wrap { margin-bottom: 10px; }
 #timeline-canvas { width: 100%; cursor: pointer; border-radius: 4px; display: block; }
 #timeline-info { font-size: 0.75rem; color: #8b949e; margin-top: 4px; }
+button.jump-btn { font-size: 0.75rem; padding: 2px 8px; background: #1a3a5c; color: #58a6ff; border: 1px solid #1f6feb; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+button.jump-btn:hover { background: #1f6feb; color: #fff; }

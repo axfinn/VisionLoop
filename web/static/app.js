@@ -271,13 +271,15 @@ async function loadEvents(page = 0) {
     const enrollBtn = canEnroll
       ? `<button class="enroll-btn" data-snap="${snapFile}" data-label="${ev.label}">注册人脸</button>`
       : '-';
+    const jumpBtn = `<button class="jump-btn" data-ts="${ev.timestamp}">▶ 跳转</button>`;
     tr.innerHTML = `
       <td>${ev.timestamp.slice(0,19).replace('T',' ')}</td>
       <td><span class="badge badge-${ev.type}">${TYPE_LABELS[ev.type] || ev.type}</span></td>
       <td>${ev.label}</td>
       <td>${(ev.confidence * 100).toFixed(0)}%</td>
       <td>${snap}</td>
-      <td>${enrollBtn}</td>`;
+      <td>${enrollBtn}</td>
+      <td>${jumpBtn}</td>`;
     eventsTbody.appendChild(tr);
   });
 
@@ -301,9 +303,36 @@ async function loadEvents(page = 0) {
       if (res.ok) pollStatus();
     });
   });
-}
+  eventsTbody.querySelectorAll('.jump-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const evTs = new Date(btn.dataset.ts).getTime() / 1000;
 
-document.getElementById('load-events').addEventListener('click', () => loadEvents(0));
+      // 切到回放 tab
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(s => s.classList.remove('active'));
+      document.querySelector('.tab-btn[data-tab="playback"]').classList.add('active');
+      document.getElementById('tab-playback').classList.add('active');
+
+      // 加载时间轴（如果还没加载）
+      if (!timelineSegments.length) await loadTimeline();
+      else drawTimeline();
+
+      // 找包含该时间戳的片段
+      let idx = timelineSegments.findIndex(s => evTs >= s.start_ts && evTs <= s.end_ts);
+      // 没精确命中则找最近的
+      if (idx === -1) {
+        let minDist = Infinity;
+        timelineSegments.forEach((s, i) => {
+          const d = Math.min(Math.abs(evTs - s.start_ts), Math.abs(evTs - s.end_ts));
+          if (d < minDist) { minDist = d; idx = i; }
+        });
+      }
+      if (idx === -1) { alert('未找到对应录像片段'); return; }
+
+      const offset = Math.max(0, evTs - timelineSegments[idx].start_ts);
+      playTimelineSegment(idx, offset);
+    });
+  });
 pagePrev.addEventListener('click', () => loadEvents(eventsPage - 1));
 pageNext.addEventListener('click', () => loadEvents(eventsPage + 1));
 loadEvents();
