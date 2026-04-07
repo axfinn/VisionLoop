@@ -3,17 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BBLuVideo 智能监控</title>
+<title>VisionLoop 智能监控</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header>
-  <div class="logo">📹 BBLuVideo</div>
+  <div class="logo">📹 VisionLoop</div>
   <nav>
     <button class="tab-btn active" data-tab="monitor">实时监控</button>
     <button class="tab-btn" data-tab="playback">录像回放</button>
     <button class="tab-btn" data-tab="faces">人脸管理</button>
     <button class="tab-btn" data-tab="events">事件历史</button>
+    <button class="tab-btn" data-tab="settings">⚙ 设置</button>
   </nav>
   <div id="status-bar">
     <span id="fps-display">FPS: --</span>
@@ -44,15 +45,22 @@
   <section id="tab-playback" class="tab-content">
     <div class="playback-layout">
       <div class="recording-list-wrap">
-        <h3>录像列表</h3>
-        <button id="refresh-recordings">刷新</button>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <h3>录像列表</h3>
+          <button id="refresh-recordings">刷新</button>
+        </div>
         <ul id="recording-list"></ul>
       </div>
       <div class="playback-player">
-        <video id="playback-video" controls style="display:none;width:100%;max-height:520px;background:#000"></video>
-        <div id="playback-placeholder">← 选择左侧录像开始回放</div>
+        <!-- 时间轴 -->
+        <div id="timeline-wrap" style="display:none">
+          <canvas id="timeline-canvas" height="48"></canvas>
+          <div id="timeline-info"></div>
+        </div>
+        <video id="playback-video" controls style="display:none;width:100%;max-height:460px;background:#000"></video>
+        <div id="playback-placeholder">← 选择左侧录像，或点击时间轴跳转</div>
         <div class="playback-controls" id="playback-controls" style="display:none">
-          <span id="playing-name"></span>
+          <span id="playing-name" style="flex:1;font-size:.82rem;color:#8b949e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
           <button id="stop-playback">停止</button>
         </div>
       </div>
@@ -110,6 +118,77 @@
       <span id="page-info">第 1 页</span>
       <button id="page-next" disabled>下一页</button>
       <span id="page-total" style="color:#8b949e;font-size:.8rem"></span>
+    </div>
+  </section>
+
+  <!-- 设置 -->
+  <section id="tab-settings" class="tab-content">
+    <div class="settings-layout">
+      <div id="settings-msg" class="settings-msg" style="display:none"></div>
+
+      <div class="settings-group">
+        <h3>摄像头</h3>
+        <label>视频源 <small>（摄像头索引或 RTSP URL）</small>
+          <input type="text" id="cfg-camera-source">
+        </label>
+        <label>分辨率
+          <select id="cfg-camera-res">
+            <option value="1280x720">1280×720</option>
+            <option value="1920x1080">1920×1080</option>
+            <option value="640x480">640×480</option>
+          </select>
+        </label>
+        <label>帧率 <input type="number" id="cfg-camera-fps" min="1" max="60"></label>
+      </div>
+
+      <div class="settings-group">
+        <h3>检测器</h3>
+        <label class="toggle-row">运动检测
+          <input type="checkbox" id="cfg-motion-enabled">
+        </label>
+        <label>最小运动区域（像素）<input type="number" id="cfg-motion-area" min="100"></label>
+        <label>入侵判定时长（秒）<input type="number" id="cfg-motion-intrusion" min="0.5" step="0.5"></label>
+
+        <label class="toggle-row">人脸识别
+          <input type="checkbox" id="cfg-face-enabled">
+        </label>
+        <label>匹配阈值 <small>（越小越严格）</small>
+          <input type="number" id="cfg-face-tolerance" min="0.1" max="1" step="0.05">
+        </label>
+
+        <label class="toggle-row">目标检测（YOLO）
+          <input type="checkbox" id="cfg-object-enabled">
+        </label>
+        <label>置信度阈值 <input type="number" id="cfg-object-conf" min="0.1" max="1" step="0.05"></label>
+      </div>
+
+      <div class="settings-group">
+        <h3>录像</h3>
+        <label class="toggle-row">启用录制
+          <input type="checkbox" id="cfg-recording-enabled">
+        </label>
+        <label>每段时长（分钟）<input type="number" id="cfg-seg-minutes" min="1" max="60"></label>
+        <label>最多保留段数 <input type="number" id="cfg-max-segments" min="1" max="200"></label>
+        <label>最多锁定段数 <input type="number" id="cfg-max-locked" min="1" max="200"></label>
+      </div>
+
+      <div class="settings-group">
+        <h3>告警</h3>
+        <label>同类事件冷却（秒）<input type="number" id="cfg-cooldown" min="1"></label>
+        <label class="toggle-row">保存截图
+          <input type="checkbox" id="cfg-save-snapshots">
+        </label>
+      </div>
+
+      <div class="settings-group">
+        <h3>推流</h3>
+        <label>JPEG 质量（1-100）<input type="number" id="cfg-stream-quality" min="1" max="100"></label>
+      </div>
+
+      <div class="settings-actions">
+        <button id="save-settings">保存配置</button>
+        <span style="font-size:.8rem;color:#8b949e">部分参数重启后生效</span>
+      </div>
     </div>
   </section>
 </main>

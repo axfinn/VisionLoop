@@ -57,6 +57,9 @@ async def enroll_from_snapshot(name: str = Form(...), snapshot_filename: str = F
     if _face_detector:
         _face_detector.reload(_known_faces_dir)
     return {"message": f"已注册: {name}", "path": str(dest)}
+
+
+@router.delete("/api/faces/{name}")
 async def delete_face(name: str):
     p = Path(_known_faces_dir)
     deleted = []

@@ -300,3 +300,235 @@ document.getElementById('load-events').addEventListener('click', () => loadEvent
 pagePrev.addEventListener('click', () => loadEvents(eventsPage - 1));
 pageNext.addEventListener('click', () => loadEvents(eventsPage + 1));
 loadEvents();
+
+// ── 时间轴回放 ────────────────────────────────────────────
+const timelineCanvas = document.getElementById('timeline-canvas');
+const timelineCtx = timelineCanvas.getContext('2d');
+const timelineWrap = document.getElementById('timeline-wrap');
+const timelineInfo = document.getElementById('timeline-info');
+let timelineSegments = []; // [{filename, created, duration, start_ts, end_ts}, ...]
+let timelineCurrentIdx = -1;
+
+async function loadTimeline() {
+  try {
+    const r = await fetch('/api/recordings/timeline');
+    const data = await r.json();
+    if (!data.length) return;
+    // 计算每段的绝对时间戳
+    timelineSegments = data.map(rec => {
+      const start = new Date(rec.created).getTime() / 1000;
+      return { ...rec, start_ts: start, end_ts: start + (rec.duration || 0) };
+    });
+    drawTimeline();
+    timelineWrap.style.display = 'block';
+  } catch {}
+}
+
+function drawTimeline() {
+  if (!timelineSegments.length) return;
+  const W = timelineCanvas.parentElement.clientWidth || 600;
+  timelineCanvas.width = W;
+  const H = 48;
+  timelineCtx.clearRect(0, 0, W, H);
+
+  const tMin = timelineSegments[0].start_ts;
+  const tMax = timelineSegments[timelineSegments.length - 1].end_ts;
+  const span = tMax - tMin || 1;
+
+  // 背景
+  timelineCtx.fillStyle = '#161b22';
+  timelineCtx.fillRect(0, 0, W, H);
+
+  timelineSegments.forEach((seg, i) => {
+    const x1 = Math.floor(((seg.start_ts - tMin) / span) * W);
+    const x2 = Math.ceil(((seg.end_ts - tMin) / span) * W);
+    const w = Math.max(x2 - x1, 3);
+    timelineCtx.fillStyle = i === timelineCurrentIdx ? '#58a6ff' : '#238636';
+    timelineCtx.fillRect(x1, 8, w, H - 16);
+  });
+
+  // 时间标签
+  timelineCtx.fillStyle = '#8b949e';
+  timelineCtx.font = '10px monospace';
+  const fmt = ts => new Date(ts * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  timelineCtx.fillText(fmt(tMin), 4, H - 4);
+  const endLabel = fmt(tMax);
+  timelineCtx.fillText(endLabel, W - timelineCtx.measureText(endLabel).width - 4, H - 4);
+}
+
+timelineCanvas.addEventListener('click', (e) => {
+  if (!timelineSegments.length) return;
+  const rect = timelineCanvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const W = timelineCanvas.width;
+  const tMin = timelineSegments[0].start_ts;
+  const tMax = timelineSegments[timelineSegments.length - 1].end_ts;
+  const span = tMax - tMin || 1;
+  const clickTs = tMin + (x / W) * span;
+
+  // 找到点击位置对应的片段
+  let idx = -1;
+  for (let i = 0; i < timelineSegments.length; i++) {
+    if (clickTs >= timelineSegments[i].start_ts && clickTs <= timelineSegments[i].end_ts) {
+      idx = i; break;
+    }
+  }
+  // 如果点在间隙，找最近的片段
+  if (idx === -1) {
+    let minDist = Infinity;
+    timelineSegments.forEach((seg, i) => {
+      const d = Math.min(Math.abs(clickTs - seg.start_ts), Math.abs(clickTs - seg.end_ts));
+      if (d < minDist) { minDist = d; idx = i; }
+    });
+  }
+  if (idx === -1) return;
+
+  const seg = timelineSegments[idx];
+  const offset = Math.max(0, clickTs - seg.start_ts);
+  playTimelineSegment(idx, offset);
+});
+
+function playTimelineSegment(idx, seekOffset = 0) {
+  if (idx < 0 || idx >= timelineSegments.length) return;
+  const seg = timelineSegments[idx];
+  timelineCurrentIdx = idx;
+  drawTimeline();
+
+  playbackVideo.src = `/api/recordings/${seg.filename}`;
+  playbackVideo.style.display = 'block';
+  playbackPlaceholder.style.display = 'none';
+  playbackControls.style.display = 'flex';
+  playingName.textContent = seg.filename;
+
+  playbackVideo.onloadedmetadata = () => {
+    if (seekOffset > 0) playbackVideo.currentTime = seekOffset;
+    playbackVideo.play();
+  };
+
+  const fmt = ts => new Date(ts * 1000).toLocaleString('zh-CN');
+  timelineInfo.textContent = `${fmt(seg.start_ts)} — ${fmt(seg.end_ts)}  (${idx + 1}/${timelineSegments.length})`;
+
+  // 播完自动跳下一段
+  playbackVideo.onended = () => {
+    if (timelineCurrentIdx + 1 < timelineSegments.length) {
+      playTimelineSegment(timelineCurrentIdx + 1, 0);
+    }
+  };
+}
+
+// 切到回放 tab 时加载时间轴
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  if (btn.dataset.tab === 'playback') {
+    btn.addEventListener('click', () => {
+      loadRecordings();
+      loadTimeline();
+    });
+  }
+});
+
+// ── 设置页面 ──────────────────────────────────────────────
+const settingsMsg = document.getElementById('settings-msg');
+
+function showSettingsMsg(text, ok) {
+  settingsMsg.textContent = text;
+  settingsMsg.className = 'settings-msg ' + (ok ? 'msg-ok' : 'msg-err');
+  settingsMsg.style.display = 'block';
+  setTimeout(() => { settingsMsg.style.display = 'none'; }, 3000);
+}
+
+async function loadSettings() {
+  try {
+    const r = await fetch('/api/config');
+    const cfg = await r.json();
+    const g = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
+    const gc = (id, val) => { const el = document.getElementById(id); if (el) el.checked = !!val; };
+
+    g('cfg-camera-source', cfg.camera?.source ?? '');
+    g('cfg-camera-res', `${cfg.camera?.width ?? 1280}x${cfg.camera?.height ?? 720}`);
+    g('cfg-camera-fps', cfg.camera?.fps ?? 15);
+
+    gc('cfg-motion-enabled', cfg.detectors?.motion?.enabled ?? true);
+    g('cfg-motion-area', cfg.detectors?.motion?.min_area ?? 500);
+    g('cfg-motion-intrusion', cfg.detectors?.motion?.intrusion_seconds ?? 3);
+
+    gc('cfg-face-enabled', cfg.detectors?.face?.enabled ?? true);
+    g('cfg-face-tolerance', cfg.detectors?.face?.tolerance ?? 0.6);
+
+    gc('cfg-object-enabled', cfg.detectors?.object?.enabled ?? false);
+    g('cfg-object-conf', cfg.detectors?.object?.confidence ?? 0.5);
+
+    gc('cfg-recording-enabled', cfg.recording?.enabled ?? true);
+    g('cfg-seg-minutes', cfg.recording?.segment_minutes ?? 10);
+    g('cfg-max-segments', cfg.recording?.max_segments ?? 50);
+    g('cfg-max-locked', cfg.recording?.max_locked ?? 20);
+
+    g('cfg-cooldown', cfg.alerts?.cooldown_seconds ?? 30);
+    gc('cfg-save-snapshots', cfg.alerts?.save_snapshots ?? true);
+
+    g('cfg-stream-quality', cfg.stream?.jpeg_quality ?? 75);
+  } catch (e) {
+    showSettingsMsg('加载配置失败', false);
+  }
+}
+
+document.getElementById('save-settings').addEventListener('click', async () => {
+  const gv = id => document.getElementById(id)?.value;
+  const gc = id => document.getElementById(id)?.checked;
+  const res_parts = (gv('cfg-camera-res') || '1280x720').split('x');
+
+  const body = {
+    camera: {
+      source: gv('cfg-camera-source'),
+      width: parseInt(res_parts[0]) || 1280,
+      height: parseInt(res_parts[1]) || 720,
+      fps: parseInt(gv('cfg-camera-fps')) || 15,
+    },
+    detectors: {
+      motion: {
+        enabled: gc('cfg-motion-enabled'),
+        min_area: parseInt(gv('cfg-motion-area')) || 500,
+        intrusion_seconds: parseFloat(gv('cfg-motion-intrusion')) || 3,
+      },
+      face: {
+        enabled: gc('cfg-face-enabled'),
+        tolerance: parseFloat(gv('cfg-face-tolerance')) || 0.6,
+      },
+      object: {
+        enabled: gc('cfg-object-enabled'),
+        confidence: parseFloat(gv('cfg-object-conf')) || 0.5,
+      },
+    },
+    recording: {
+      enabled: gc('cfg-recording-enabled'),
+      segment_minutes: parseInt(gv('cfg-seg-minutes')) || 10,
+      max_segments: parseInt(gv('cfg-max-segments')) || 50,
+      max_locked: parseInt(gv('cfg-max-locked')) || 20,
+    },
+    alerts: {
+      cooldown_seconds: parseInt(gv('cfg-cooldown')) || 30,
+      save_snapshots: gc('cfg-save-snapshots'),
+    },
+    stream: {
+      jpeg_quality: parseInt(gv('cfg-stream-quality')) || 75,
+    },
+  };
+
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    showSettingsMsg(d.message || (r.ok ? '已保存' : '保存失败'), r.ok);
+  } catch {
+    showSettingsMsg('保存失败', false);
+  }
+});
+
+// 切到设置 tab 时加载配置
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  if (btn.dataset.tab === 'settings') {
+    btn.addEventListener('click', loadSettings);
+  }
+});

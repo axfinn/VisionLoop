@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
 
-from web.routes import stream, events, faces, playback
+from web.routes import stream, events, faces, playback, config_route
 from web.broadcaster import StreamBroadcaster
 
 
@@ -24,11 +24,13 @@ def create_app(
     faces.set_face_detector(face_detector, known_faces_dir)
     faces.set_snapshots_dir(snapshots_dir)
     playback.set_recorder(recorder)
+    config_route.set_config_path("config.yaml")
 
     app.include_router(stream.router)
     app.include_router(events.router)
     app.include_router(faces.router)
     app.include_router(playback.router)
+    app.include_router(config_route.router)
 
     @app.get("/api/status")
     async def status():

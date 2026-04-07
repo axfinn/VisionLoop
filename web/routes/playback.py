@@ -1,7 +1,9 @@
 from __future__ import annotations
+import subprocess
+import json
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse, Response
+from fastapi.responses import StreamingResponse
 from storage.recorder import VideoRecorder
 
 router = APIRouter()
@@ -13,11 +15,38 @@ def set_recorder(r: VideoRecorder) -> None:
     _recorder = r
 
 
+def _probe_duration(path: Path) -> float:
+    """用 ffprobe 获取视频时长（秒），失败返回 0。"""
+    try:
+        out = subprocess.check_output(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "json", str(path)],
+            stderr=subprocess.DEVNULL, timeout=5
+        )
+        return float(json.loads(out)["format"]["duration"])
+    except Exception:
+        return 0.0
+
+
 @router.get("/api/recordings")
 async def list_recordings():
     if _recorder is None:
         return []
     return _recorder.list_recordings()
+
+
+@router.get("/api/recordings/timeline")
+async def recordings_timeline():
+    """返回按时间排序的录像片段列表，含开始/结束时间戳，供时间轴使用。"""
+    if _recorder is None:
+        return []
+    recs = _recorder.list_recordings()
+    recs = sorted(recs, key=lambda r: r["created"])
+    result = []
+    for rec in recs:
+        duration = _probe_duration(Path("recordings") / rec["filename"])
+        result.append({**rec, "duration": round(duration, 2)})
+    return result
 
 
 @router.get("/api/recordings/{filename}")
@@ -31,7 +60,6 @@ async def serve_recording(filename: str, request: Request):
     range_header = request.headers.get("range")
 
     if range_header:
-        # 解析 Range: bytes=start-end
         range_val = range_header.replace("bytes=", "")
         parts = range_val.split("-")
         start = int(parts[0])
