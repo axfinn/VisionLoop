@@ -155,4 +155,10 @@ PyYAML                  配置文件解析
 Pillow                  中文文字渲染
 ```
 
-> `face-recognition` 依赖 `dlib`，首次安装需要编译，建议提前安装 cmake：`brew install cmake`
+> `face-recognition` 依赖 `dlib`，如果 pip 没有找到预编译 wheel 会触发源码编译：
+> ```bash
+> brew install cmake
+> # 如果编译报 SDK 路径错误，手动指定：
+> export SDKROOT=$(xcrun --show-sdk-path)
+> pip install dlib
+> ```
