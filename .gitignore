@@ -16,6 +16,14 @@ snapshots/*.png
 *.pt
 *.onnx
 
+# IDE / tools
+.playwright-mcp/
+
+# Known faces (personal data)
+known_faces/*.jpg
+known_faces/*.png
+known_faces/*.jpeg
+
 # OS
 .DS_Store
 
