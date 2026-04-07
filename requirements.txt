@@ -1,0 +1,12 @@
+fastapi>=0.110
+uvicorn[standard]
+opencv-python-headless
+face-recognition
+ultralytics
+aiosqlite
+pydantic>=2
+pydantic-settings
+plyer
+PyYAML
+numpy
+python-multipart

@@ -1,0 +1,305 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0d1117;
+  color: #e6edf3;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 20px;
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+  flex-shrink: 0;
+}
+
+.logo { font-size: 1.2rem; font-weight: 700; color: #58a6ff; white-space: nowrap; }
+
+nav { display: flex; gap: 4px; flex: 1; }
+
+.tab-btn {
+  padding: 6px 14px;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  background: transparent;
+  color: #8b949e;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.15s;
+}
+.tab-btn:hover { background: #21262d; color: #e6edf3; }
+.tab-btn.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+
+#status-bar { display: flex; gap: 12px; font-size: 0.8rem; white-space: nowrap; }
+#fps-display { color: #3fb950; }
+#faces-count { color: #d2a8ff; }
+.disconnected { color: #f85149; }
+.connected { color: #3fb950; }
+
+main { flex: 1; overflow: hidden; }
+
+.tab-content { display: none; height: 100%; padding: 16px; }
+.tab-content.active { display: flex; flex-direction: column; }
+
+/* 监控布局 */
+.monitor-layout {
+  display: flex;
+  gap: 16px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.video-wrap {
+  flex: 1;
+  position: relative;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#live-canvas { max-width: 100%; max-height: 100%; display: block; }
+#no-signal { position: absolute; color: #8b949e; font-size: 1.1rem; }
+
+.event-panel {
+  width: 280px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid #30363d;
+}
+.panel-header h3 { font-size: 0.9rem; }
+.panel-header button {
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  background: transparent;
+  color: #8b949e;
+  cursor: pointer;
+}
+
+#event-list {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  padding: 8px;
+}
+
+#event-list li {
+  padding: 6px 8px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  font-size: 0.78rem;
+  border-left: 3px solid;
+  background: #0d1117;
+}
+.ev-motion { border-color: #d2a8ff; }
+.ev-intrusion { border-color: #f85149; background: #1a0a0a; }
+.ev-face { border-color: #3fb950; }
+.ev-stranger { border-color: #ff7b72; background: #1a0a0a; }
+.ev-object { border-color: #ffa657; }
+
+.ev-time { color: #8b949e; font-size: 0.72rem; }
+.ev-label { font-weight: 600; }
+
+/* 回放 */
+.playback-layout { display: flex; gap: 16px; height: 100%; overflow: hidden; }
+
+.recording-list-wrap {
+  width: 240px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 12px;
+  overflow-y: auto;
+}
+.recording-list-wrap h3 { margin-bottom: 8px; font-size: 0.9rem; }
+#refresh-recordings {
+  font-size: 0.78rem;
+  padding: 3px 8px;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  background: transparent;
+  color: #8b949e;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+#recording-list { list-style: none; }
+#recording-list li {
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  border: 1px solid transparent;
+  margin-bottom: 4px;
+}
+#recording-list li:hover { background: #21262d; border-color: #30363d; }
+#recording-list li.active { border-color: #1f6feb; background: #0d2044; }
+.rec-name { font-weight: 600; color: #58a6ff; }
+.rec-meta { color: #8b949e; font-size: 0.72rem; }
+
+.playback-player {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+#playback-img { max-width: 100%; max-height: calc(100% - 60px); border-radius: 4px; }
+#playback-placeholder { color: #8b949e; }
+
+.playback-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 16px;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 0.85rem;
+}
+#playing-name { flex: 1; color: #58a6ff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.playback-controls select, .playback-controls button {
+  padding: 4px 8px;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  background: #161b22;
+  color: #e6edf3;
+  cursor: pointer;
+}
+
+/* 人脸管理 */
+.faces-layout { display: flex; gap: 24px; }
+
+.enroll-form, .known-faces {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 16px;
+}
+.enroll-form { width: 320px; }
+.enroll-form h3, .known-faces h3 { margin-bottom: 12px; font-size: 0.95rem; }
+
+#enroll-form { display: flex; flex-direction: column; gap: 10px; }
+#enroll-form input[type="text"] {
+  padding: 8px 10px;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  background: #0d1117;
+  color: #e6edf3;
+  font-size: 0.9rem;
+}
+#enroll-form input[type="file"] { font-size: 0.85rem; color: #8b949e; }
+#enroll-form button {
+  padding: 8px;
+  background: #1f6feb;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+#enroll-msg { margin-top: 8px; font-size: 0.85rem; }
+.msg-ok { color: #3fb950; }
+.msg-err { color: #f85149; }
+
+#faces-list { list-style: none; }
+#faces-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  background: #0d1117;
+  font-size: 0.85rem;
+}
+#faces-list button {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border: 1px solid #f85149;
+  border-radius: 4px;
+  background: transparent;
+  color: #f85149;
+  cursor: pointer;
+}
+
+/* 事件历史 */
+.events-filter { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+.events-filter select, .events-filter button, .events-filter input {
+  padding: 6px 12px;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  background: #161b22;
+  color: #e6edf3;
+  cursor: pointer;
+}
+.quick-ranges { display: flex; gap: 6px; flex-wrap: wrap; }
+.range-btn { padding: 4px 10px; font-size: 0.78rem; border: 1px solid #30363d; border-radius: 12px; background: #161b22; color: #8b949e; cursor: pointer; }
+.range-btn:hover { background: #21262d; color: #e6edf3; }
+.range-btn.active { background: #1f6feb; color: #fff; border-color: #1f6feb; }
+
+#events-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+#events-table th {
+  text-align: left;
+  padding: 8px 12px;
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+  color: #8b949e;
+}
+#events-table td { padding: 8px 12px; border-bottom: 1px solid #21262d; }
+#events-table tr:hover td { background: #161b22; }
+.pagination { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.pagination button { padding: 5px 14px; border: 1px solid #30363d; border-radius: 6px; background: #161b22; color: #e6edf3; cursor: pointer; }
+.pagination button:disabled { opacity: 0.35; cursor: default; }
+.pagination button:not(:disabled):hover { background: #21262d; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.badge-motion { background: #2d1f6e; color: #d2a8ff; }
+.badge-intrusion { background: #3d0a0a; color: #f85149; }
+.badge-face { background: #0a2d0a; color: #3fb950; }
+.badge-stranger { background: #3d1a0a; color: #ff7b72; }
+.badge-object { background: #2d1a0a; color: #ffa657; }
+
+a.snap-link { color: #58a6ff; text-decoration: none; font-size: 0.78rem; }
+a.snap-link:hover { text-decoration: underline; }
+button.enroll-btn { font-size: 0.75rem; padding: 2px 8px; background: #1f6feb; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+button.enroll-btn:hover { background: #388bfd; }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #0d1117; }
+::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }

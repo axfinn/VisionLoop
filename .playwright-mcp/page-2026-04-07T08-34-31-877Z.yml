@@ -1,0 +1,38 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: 📹 BBLuVideo
+    - navigation [ref=e4]:
+      - button "实时监控" [ref=e5] [cursor=pointer]
+      - button "录像回放" [ref=e6] [cursor=pointer]
+      - button "人脸管理" [ref=e7] [cursor=pointer]
+      - button "事件历史" [ref=e8] [cursor=pointer]
+    - generic [ref=e9]:
+      - generic [ref=e10]: "FPS: 5.1"
+      - generic [ref=e11]: "已注册: 0 人"
+      - generic [ref=e12]: ● 已连接
+  - main [ref=e13]:
+    - complementary [ref=e18]:
+      - generic [ref=e19]:
+        - heading "实时事件" [level=3] [ref=e20]
+        - button "清空" [ref=e21] [cursor=pointer]
+      - list [ref=e22]:
+        - listitem [ref=e23]:
+          - generic [ref=e24]: 16:34:31
+          - generic [ref=e25]: "物体: 人"
+          - generic [ref=e26]: 置信度 93%
+        - listitem [ref=e27]:
+          - generic [ref=e28]: 16:34:31
+          - generic [ref=e29]: "🚨 陌生人: 陌生人"
+          - generic [ref=e30]: 置信度 0%
+        - listitem [ref=e31]:
+          - generic [ref=e32]: 16:34:31
+          - generic [ref=e33]: "⚠️ 入侵: 入侵警报"
+          - generic [ref=e34]: 置信度 18%
+        - listitem [ref=e35]:
+          - generic [ref=e36]: 16:34:31
+          - generic [ref=e37]: "⚠️ 入侵: 入侵警报"
+          - generic [ref=e38]: 置信度 17%
+        - listitem [ref=e39]:
+          - generic [ref=e40]: 16:34:31
+          - generic [ref=e41]: "⚠️ 入侵: 入侵警报"
+          - generic [ref=e42]: 置信度 22%

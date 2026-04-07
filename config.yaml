@@ -1,0 +1,41 @@
+camera:
+  source: 1          # 摄像头索引或 RTSP URL
+  width: 1280
+  height: 720
+  fps: 30
+
+detectors:
+  motion:
+    enabled: true
+    min_area: 1500          # 最小运动区域像素数
+    history: 500
+    var_threshold: 16
+    intrusion_seconds: 2.0  # 持续运动多少秒触发入侵警报
+  face:
+    enabled: true
+    tolerance: 0.55         # 人脸匹配阈值（越小越严格）
+    scale: 0.5              # 处理分辨率缩放比例
+  object:
+    enabled: true
+    model: yolov8n.pt
+    confidence: 0.45
+    classes: [0, 2, 15, 16] # person, car, cat, dog
+
+alerts:
+  cooldown_seconds: 30      # 同类事件最小间隔
+  save_snapshots: true
+
+recording:
+  segment_minutes: 1      # 每段录像时长（分钟）
+  max_segments: 20        # 最多保留的普通录像文件数
+  max_locked: 20          # 最多保留的事件锁定文件数
+
+web:
+  host: 0.0.0.0
+  port: 8888
+  stream_quality: 80        # JPEG 质量 1-100
+
+paths:
+  known_faces: known_faces
+  snapshots: snapshots
+  database: data.db

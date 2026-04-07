@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BBLuVideo 智能监控</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="logo">📹 BBLuVideo</div>
+  <nav>
+    <button class="tab-btn active" data-tab="monitor">实时监控</button>
+    <button class="tab-btn" data-tab="playback">录像回放</button>
+    <button class="tab-btn" data-tab="faces">人脸管理</button>
+    <button class="tab-btn" data-tab="events">事件历史</button>
+  </nav>
+  <div id="status-bar">
+    <span id="fps-display">FPS: --</span>
+    <span id="faces-count">已注册: -- 人</span>
+    <span id="conn-status" class="disconnected">● 未连接</span>
+  </div>
+</header>
+
+<main>
+  <!-- 实时监控 -->
+  <section id="tab-monitor" class="tab-content active">
+    <div class="monitor-layout">
+      <div class="video-wrap">
+        <canvas id="live-canvas"></canvas>
+        <div id="no-signal">等待视频流...</div>
+      </div>
+      <aside class="event-panel">
+        <div class="panel-header">
+          <h3>实时事件</h3>
+          <button id="clear-events">清空</button>
+        </div>
+        <ul id="event-list"></ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 录像回放 -->
+  <section id="tab-playback" class="tab-content">
+    <div class="playback-layout">
+      <div class="recording-list-wrap">
+        <h3>录像列表</h3>
+        <button id="refresh-recordings">刷新</button>
+        <ul id="recording-list"></ul>
+      </div>
+      <div class="playback-player">
+        <video id="playback-video" controls style="display:none;width:100%;max-height:520px;background:#000"></video>
+        <div id="playback-placeholder">← 选择左侧录像开始回放</div>
+        <div class="playback-controls" id="playback-controls" style="display:none">
+          <span id="playing-name"></span>
+          <button id="stop-playback">停止</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 人脸管理 -->
+  <section id="tab-faces" class="tab-content">
+    <div class="faces-layout">
+      <div class="enroll-form">
+        <h3>注册新人脸</h3>
+        <form id="enroll-form">
+          <input type="text" id="face-name" placeholder="姓名" required>
+          <input type="file" id="face-file" accept="image/jpeg,image/png" required>
+          <button type="submit">注册</button>
+        </form>
+        <div id="enroll-msg"></div>
+      </div>
+      <div class="known-faces">
+        <h3>已注册人脸</h3>
+        <ul id="faces-list"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 事件历史 -->
+  <section id="tab-events" class="tab-content">
+    <div class="events-filter">
+      <select id="filter-type">
+        <option value="">全部类型</option>
+        <option value="motion">运动</option>
+        <option value="intrusion">入侵</option>
+        <option value="face">人脸</option>
+        <option value="stranger">陌生人</option>
+        <option value="object">物体</option>
+      </select>
+      <div class="quick-ranges">
+        <button class="range-btn" data-range="30m">近30分钟</button>
+        <button class="range-btn" data-range="1h">近1小时</button>
+        <button class="range-btn" data-range="today">今天</button>
+        <button class="range-btn" data-range="yesterday">昨天</button>
+        <button class="range-btn" data-range="7d">近7天</button>
+        <button class="range-btn active" data-range="all">全部</button>
+      </div>
+      <input type="datetime-local" id="filter-since" title="开始时间">
+      <input type="datetime-local" id="filter-until" title="结束时间">
+      <button id="load-events">查询</button>
+    </div>
+    <table id="events-table">
+      <thead><tr><th>时间</th><th>类型</th><th>标签</th><th>置信度</th><th>截图</th><th>操作</th></tr></thead>
+      <tbody id="events-tbody"></tbody>
+    </table>
+    <div class="pagination" id="pagination">
+      <button id="page-prev" disabled>上一页</button>
+      <span id="page-info">第 1 页</span>
+      <button id="page-next" disabled>下一页</button>
+      <span id="page-total" style="color:#8b949e;font-size:.8rem"></span>
+    </div>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
