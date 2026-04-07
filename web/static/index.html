@@ -61,6 +61,13 @@
         <div id="playback-placeholder">← 选择左侧录像，或点击时间轴跳转</div>
         <div class="playback-controls" id="playback-controls" style="display:none">
           <span id="playing-name" style="flex:1;font-size:.82rem;color:#8b949e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+          <select id="playback-speed">
+            <option value="0.5">0.5x</option>
+            <option value="1" selected>1x</option>
+            <option value="1.5">1.5x</option>
+            <option value="2">2x</option>
+            <option value="4">4x</option>
+          </select>
           <button id="stop-playback">停止</button>
         </div>
       </div>

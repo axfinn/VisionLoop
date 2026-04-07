@@ -131,8 +131,15 @@ document.getElementById('stop-playback').addEventListener('click', () => {
   playbackVideo.style.display = 'none';
   playbackPlaceholder.style.display = 'block';
   playbackControls.style.display = 'none';
+  timelineCurrentIdx = -1;
+  drawTimeline();
   currentRecording = null;
   document.querySelectorAll('#recording-list li').forEach(el => el.classList.remove('active'));
+});
+
+const speedSelect = document.getElementById('playback-speed');
+speedSelect.addEventListener('change', () => {
+  playbackVideo.playbackRate = parseFloat(speedSelect.value);
 });
 
 document.getElementById('refresh-recordings').addEventListener('click', loadRecordings);
@@ -402,6 +409,7 @@ function playTimelineSegment(idx, seekOffset = 0) {
 
   playbackVideo.onloadedmetadata = () => {
     if (seekOffset > 0) playbackVideo.currentTime = seekOffset;
+    playbackVideo.playbackRate = parseFloat(speedSelect.value);
     playbackVideo.play();
   };
 
