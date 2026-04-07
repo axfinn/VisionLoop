@@ -84,6 +84,14 @@ class FrameProcessor:
         self._frame_count = 0
         self._fps_time = time.time()
 
+    def apply_config(self, cfg: AppConfig) -> None:
+        """原地更新所有检测器配置，立即生效，无需重启。"""
+        self._cfg = cfg
+        # 更新各检测器的 cfg 引用
+        self._motion._cfg = cfg.detectors.motion
+        self._face._cfg = cfg.detectors.face
+        self._object._cfg = cfg.detectors.object
+
     @property
     def face_detector(self) -> FaceDetector:
         return self._face

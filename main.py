@@ -1,6 +1,5 @@
 from __future__ import annotations
 import asyncio
-import threading
 import uvicorn
 from config import load_config
 from core.camera import Camera
@@ -13,6 +12,7 @@ from alerts.notifiers.console import ConsoleNotifier
 from alerts.notifiers.desktop import DesktopNotifier
 from web.broadcaster import StreamBroadcaster
 from web.app import create_app
+from web.routes import config_route
 
 
 async def main() -> None:
@@ -28,6 +28,7 @@ async def main() -> None:
         max_segments=cfg.recording.max_segments,
         max_locked=cfg.recording.max_locked,
     )
+    recorder.enabled = cfg.recording.enabled
 
     # 告警
     notifiers = [ConsoleNotifier(), DesktopNotifier()]
@@ -44,17 +45,8 @@ async def main() -> None:
 
     async def on_detections(detections, frame) -> None:
         await alert_mgr.handle(detections, frame, snapshot_saver, db)
-        # 有告警事件时锁定前后录像
         if any(det.type in ("intrusion", "stranger") for det in detections):
             recorder.lock_around_event()
-        for det in detections:
-            await broadcaster.broadcast_event({
-                "type": det.type,
-                "label": det.label,
-                "confidence": det.confidence,
-                "timestamp": det.timestamp.isoformat(),
-            })
-        # 广播事件到 WebSocket 客户端
         for det in detections:
             await broadcaster.broadcast_event({
                 "type": det.type,
@@ -86,13 +78,26 @@ async def main() -> None:
         snapshots_dir=cfg.paths.snapshots,
     )
 
+    def on_config_reload() -> None:
+        new_cfg = load_config()
+        processor.apply_config(new_cfg)
+        alert_mgr._cfg = new_cfg.alerts
+        recorder.enabled = new_cfg.recording.enabled
+        recorder.apply_config(
+            new_cfg.recording.segment_minutes,
+            new_cfg.recording.max_segments,
+            new_cfg.recording.max_locked,
+        )
+
+    config_route.set_reload_callback(on_config_reload)
+
     # 挂载 snapshots 静态目录
     from fastapi.staticfiles import StaticFiles
     import pathlib
     pathlib.Path(cfg.paths.snapshots).mkdir(exist_ok=True)
     app.mount("/snapshots", StaticFiles(directory=cfg.paths.snapshots), name="snapshots")
 
-    print(f"\n🎥 BBLuVideo 智能监控已启动")
+    print(f"\n🎥 VisionLoop 智能监控已启动")
     print(f"   浏览器访问: http://localhost:{cfg.web.port}\n")
 
     config = uvicorn.Config(app, host=cfg.web.host, port=cfg.web.port, log_level="warning")

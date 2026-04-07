@@ -34,13 +34,23 @@ class VideoRecorder:
         self._lock = threading.Lock()
         self._locked_files: set[str] = set()
 
+    enabled: bool = True
+
     def write(self, frame: np.ndarray) -> None:
+        if not self.enabled:
+            return
         with self._lock:
             now = time.time()
             if self._writer is None or (now - self._segment_start) >= self._segment_seconds:
                 self._rotate(frame)
             if self._writer:
                 self._writer.write(frame)
+
+    def apply_config(self, segment_minutes: int, max_segments: int, max_locked: int) -> None:
+        with self._lock:
+            self._segment_seconds = segment_minutes * 60
+            self._max_segments = max_segments
+            self._max_locked = max_locked
 
     def current_file(self) -> str:
         return self._current_file

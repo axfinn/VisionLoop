@@ -58,6 +58,7 @@ class PathsConfig(BaseModel):
 
 
 class RecordingConfig(BaseModel):
+    enabled: bool = True
     segment_minutes: int = 1
     max_segments: int = 20
     max_locked: int = 20
