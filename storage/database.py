@@ -24,7 +24,7 @@ class Database:
 
     async def init(self) -> None:
         self._db = await aiosqlite.connect(self._path)
-        await self._db.execute(SCHEMA)
+        await self._db.executescript(SCHEMA)
         await self._db.commit()
 
     async def insert_event(self, det: Detection, snapshot_path: str | None = None) -> int:
